@@ -82,7 +82,12 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
         id, title, creator, format, genre, description, image,
         image_alt, rating::text AS rating, chapters, match_score AS match, tags
       FROM works
-      WHERE curation_status = 'approved'
+      WHERE (
+        EXISTS (
+          SELECT 1 FROM unnest(tags[1:6]) AS tag
+          WHERE lower(tag) IN ('yuri', 'shoujo ai')
+        )
+      )
       AND (
         ${q ?? null}::text IS NULL
         OR title ILIKE '%' || ${q ?? null} || '%'

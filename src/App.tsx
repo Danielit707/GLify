@@ -85,6 +85,65 @@ function WorkCard({
   );
 }
 
+interface SimilarWork {
+  id: string;
+  title: string;
+  format: string;
+  sharedTags: number;
+  sharedTagNames: string[];
+  matchScore: number;
+}
+
+function SimilarWorks({ workId }: { workId: string }) {
+  const [similar, setSimilar] = useState<SimilarWork[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+
+    fetch(`${apiBase}/api/works/${workId}/similar?limit=4`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Failed to load similar works");
+        const data = await response.json();
+        setSimilar(data.recommendations);
+        setLoading(false);
+      })
+      .catch(() => {
+        setSimilar([]);
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [workId]);
+
+  if (loading || similar.length === 0) return null;
+
+  return (
+    <div className="similar-works">
+      <h3>Similar stories</h3>
+      <div className="similar-grid">
+        {similar.map((work) => (
+          <div className="similar-card" key={work.id}>
+            <span className="similar-format">{work.format}</span>
+            <h4>{work.title}</h4>
+            <p className="similar-match">
+              <Sparkles size={11} /> {work.matchScore}% match — shares {work.sharedTags} tag{work.sharedTags !== 1 ? "s" : ""}
+            </p>
+            <div className="tag-row">
+              {work.sharedTagNames.slice(0, 3).map((tag) => (
+                <span className="tag" key={tag}>{tag}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [catalogWorks, setCatalogWorks] = useState(works);
   const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample">("loading");
@@ -329,6 +388,10 @@ function App() {
               </button>
             </div>
           )}
+          {visibleWorks.length > 0 && (
+            <SimilarWorks workId={visibleWorks[0].id} />
+          )}
+
           <button className="more-button" type="button" onClick={() => window.alert("More recommendations are coming soon.")}>
             More stories are on their way <ArrowDown size={15} />
           </button>

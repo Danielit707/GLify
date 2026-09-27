@@ -22,7 +22,7 @@ export function initNeo4j(config: AppConfig): Driver | null {
     {
       maxConnectionLifetime: 60 * 60 * 1000,
       maxConnectionPoolSize: 50,
-      connectionTimeout: 30_000,
+      connectionTimeout: 5_000,
     }
   );
 

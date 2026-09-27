@@ -52,7 +52,12 @@ export default async function healthRoutes(
         try {
           const session = fastify.neo4j.session();
           try {
-            await session.run("RETURN 1");
+            await Promise.race([
+              session.run("RETURN 1"),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Neo4j connection timeout")), 3000)
+              ),
+            ]);
           } finally {
             await session.close();
           }

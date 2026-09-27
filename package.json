@@ -13,6 +13,8 @@
     "typecheck:server": "npm --prefix server run typecheck",
     "db:import-anilist": "npm --prefix server run db:import-anilist --",
     "db:curate-anilist": "npm --prefix server run db:curate-anilist --",
+    "db:seed-graph": "npm --prefix server run db:seed-graph",
+    "db:filter-yuri": "npm --prefix server run db:filter-yuri",
     "preview": "vite preview"
   },
   "dependencies": {

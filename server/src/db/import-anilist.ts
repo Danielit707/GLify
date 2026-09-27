@@ -100,7 +100,7 @@ const YURI_MEDIA_QUERY = /* GraphQL */ `
 interface AniListMedia {
   id: number;
   title: { romaji: string | null; english: string | null; native: string | null };
-  format: string;
+  format: string | null;
   description: string | null;
   coverImage: { large: string | null; medium: string | null };
   averageScore: number | null;
@@ -132,7 +132,7 @@ const AniListResponseSchema = z.object({
           english: z.string().nullable(),
           native: z.string().nullable(),
         }),
-        format: z.string(),
+        format: z.string().nullable(),
         description: z.string().nullable(),
         coverImage: z.object({
           large: z.string().nullable(),
@@ -168,7 +168,9 @@ const AniListResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 function mapAniListToWork(media: AniListMedia) {
-  const format = ANILIST_FORMAT_MAP.get(media.format);
+  const format = media.format === null
+    ? undefined
+    : ANILIST_FORMAT_MAP.get(media.format);
   if (!format) return null;
 
   const title = media.title.english || media.title.romaji || media.title.native;
@@ -199,6 +201,9 @@ function mapAniListToWork(media: AniListMedia) {
       .filter((tag) => !tag.isMediaSpoiler && !tag.isGeneralSpoiler && !tag.isAdult)
       .map((tag) => tag.name),
   ])];
+
+  // Only include works with "yuri" in first 6 tags
+  if (!isYuriInTopTags(media)) return null;
 
   return {
     id: `anilist-${media.id}`,

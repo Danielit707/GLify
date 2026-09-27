@@ -151,6 +151,14 @@ button { color: inherit; }
 .tag { padding: 5px 7px; border-radius: 4px; background: #f8f2ef; color: #85656a; font-size: 8px; }
 .more-button { display: flex; align-items: center; gap: 10px; margin: 27px auto 0; padding: 10px 15px; border: 1px solid #eadfda; border-radius: 6px; background: #fff; color: #796b67; font-size: 10px; cursor: pointer; }
 .more-button:hover { border-color: #d7a6b0; color: var(--rose); }
+.similar-works { margin-top: 32px; }
+.similar-works h3 { margin: 0 0 14px; font: 600 18px "Playfair Display", Georgia, serif; }
+.similar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.similar-card { padding: 13px 14px; border: 1px solid #eee8e2; border-radius: 8px; background: #fff; }
+.similar-format { display: inline-block; padding: 4px 8px; border-radius: 4px; background: #f8f2ef; color: #85656a; font-size: 8px; font-weight: 600; }
+.similar-card h4 { margin: 8px 0 6px; font: 600 13px/1.3 "Playfair Display", Georgia, serif; }
+.similar-match { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; color: var(--rose); font-size: 9px; font-weight: 600; }
+.similar-match svg { flex: 0 0 auto; }
 .empty-state { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .empty-state > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #f5e9e7; color: var(--rose); }
 .empty-state h3 { margin: 15px 0 4px; font: 600 19px "Playfair Display", Georgia, serif; }
