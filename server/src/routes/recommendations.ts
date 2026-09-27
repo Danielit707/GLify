@@ -111,6 +111,21 @@ export default async function recommendationRoutes(
           kind: kind === "FAVORITED" ? "favorite" : "watched",
         }];
       });
+      const currentUserInteractions = await fastify.postgres`
+        SELECT work_id, 'favorite' AS kind
+        FROM favorites
+        WHERE user_id = ${userId}
+        UNION ALL
+        SELECT work_id, 'watched' AS kind
+        FROM watched_works
+        WHERE user_id = ${userId}
+      `;
+      for (const row of currentUserInteractions) {
+        const workId = String(row.work_id);
+        if (workById.has(workId) && (row.kind === "favorite" || row.kind === "watched")) {
+          interactions.push({ userId, workId, kind: row.kind });
+        }
+      }
       const eligibleInteractions = filterEligibleInteractions(
         userId,
         optedInUserIds,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -20,6 +20,7 @@ import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton } from "@cler
 import { formats, genres, isWork, works, type Work } from "./catalog";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
+const CATALOG_SECTION_SIZE = 15;
 
 interface AppProps {
   accountStatus?: AccountStatus;
@@ -317,6 +318,8 @@ function App({
   const [format, setFormat] = useState("All formats");
   const [activeNav, setActiveNav] = useState("Discover");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [catalogSection, setCatalogSection] = useState(0);
+  const catalogGridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -376,6 +379,10 @@ function App({
     });
   }, [catalogWorks, format, genre, query]);
 
+  useEffect(() => {
+    setCatalogSection(0);
+  }, [activeNav, format, genre, query]);
+
   const visibleWorks = activeNav === "My list" && accountStatus === "signed-in"
     ? favoritesLoading
       ? []
@@ -383,6 +390,22 @@ function App({
     : activeNav === "My list"
       ? []
       : filteredWorks;
+  const catalogSectionCount = Math.ceil(visibleWorks.length / CATALOG_SECTION_SIZE);
+  const displayedWorks = visibleWorks.slice(
+    catalogSection * CATALOG_SECTION_SIZE,
+    (catalogSection + 1) * CATALOG_SECTION_SIZE,
+  );
+
+  useEffect(() => {
+    if (catalogSectionCount > 0 && catalogSection >= catalogSectionCount) {
+      setCatalogSection(catalogSectionCount - 1);
+    }
+  }, [catalogSection, catalogSectionCount]);
+
+  function goToCatalogSection(section: number) {
+    setCatalogSection(section);
+    catalogGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function chooseNav(name: string) {
     setActiveNav(name);
@@ -542,8 +565,8 @@ function App({
           </div>
 
           {visibleWorks.length > 0 ? (
-            <div className="work-grid">
-              {visibleWorks.map((work) => (
+            <div className="work-grid" ref={catalogGridRef}>
+              {displayedWorks.map((work) => (
                 <WorkCard
                   key={work.id}
                   work={work}
@@ -583,10 +606,35 @@ function App({
               )}
             </div>
           )}
+          {catalogSectionCount > 1 && (
+            <nav className="catalog-pagination" aria-label="Catalog sections">
+              <button
+                type="button"
+                disabled={catalogSection === 0}
+                onClick={() => goToCatalogSection(catalogSection - 1)}
+              >
+                Previous 15
+              </button>
+              <span>
+                Section {catalogSection + 1} of {catalogSectionCount}
+                {" · "}Showing {catalogSection * CATALOG_SECTION_SIZE + 1}–
+                {Math.min((catalogSection + 1) * CATALOG_SECTION_SIZE, visibleWorks.length)} of {visibleWorks.length}
+              </span>
+              <button
+                type="button"
+                disabled={catalogSection + 1 >= catalogSectionCount}
+                onClick={() => goToCatalogSection(catalogSection + 1)}
+              >
+                Next 15 <ArrowRight size={14} />
+              </button>
+            </nav>
+          )}
           {activeNav === "Discover" && (
             <PersonalizedRecommendations
               accountStatus={accountStatus}
-              recommendations={recommendations}
+              recommendations={recommendations.filter(
+                (work) => !savedIds.includes(work.id) && !watchedIds.includes(work.id),
+              )}
               loading={favoritesLoading || recommendationsLoading}
               error={recommendationsError}
               coldStart={recommendationsColdStart}
@@ -596,9 +644,6 @@ function App({
             />
           )}
 
-          <button className="more-button" type="button" onClick={() => window.alert("More recommendations are coming soon.")}>
-            More stories are on their way <ArrowDown size={15} />
-          </button>
         </section>
 
         <section className="community-section" id="communities">
