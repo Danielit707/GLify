@@ -1,6 +1,6 @@
 # GLify
 
-**A softer space for Girls' Love stories and the people who love them.**
+**A dedicated space for Girls' Love stories and the people who love them.**
 
 GLify is a community-first discovery platform for Girls' Love (GL) and Yuri media: manga, manhwa, light novels, and live-action series. It will help fans find their next favorite story, connect with like-minded readers, and take part in welcoming, series-specific communities.
 
