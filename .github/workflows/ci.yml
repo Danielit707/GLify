@@ -32,6 +32,9 @@ jobs:
       - name: Type-check server
         run: npm run typecheck:server
 
+      - name: Test recommendation scoring
+        run: npm --prefix server test
+
       - name: Build server
         run: npm run build:server
 

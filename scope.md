@@ -8,7 +8,9 @@ The product should feel welcoming, inclusive, safe, and easy to use on desktop a
 
 ## Current status
 
-The repository contains a responsive React and TypeScript discovery UI plus a Fastify API. The API reads approved catalog records from Neon/Postgres using `GET /api/works`; `npm run db:setup` creates or upgrades the catalog table and inserts eight demonstration titles. `npm run db:import-anilist` imports/upserts Yuri-tagged AniList media, auto-approving only entries with Yuri among the first six returned tags and leaving other matches pending for review. The `db:curate-anilist` CLI can review, approve, or reject pending imports; pending/rejected titles are hidden from public catalog results. The tag-position rule is a heuristic, not confirmation that every result is Girls' Love. Neo4j connections are optional until graph recommendations are added. There is no account system, user-specific persistence, graph-backed recommendation, or real community content connected yet.
+The repository contains a responsive React and TypeScript discovery UI and a Fastify API. The API reads approved catalog records from Neon/Postgres using `GET /api/works`; public results must have "Yuri" or "Shoujo Ai" among their first six tags. `npm run db:setup` creates or upgrades the catalog, favorites, watched/read activity, and recommendation-preference tables and inserts demonstration titles. `npm run db:import-anilist` imports/upserts AniList media, and `db:curate-anilist` supports review of imports.
+
+Clerk provides sign-in. Neon is the source of truth for the catalog, favorites, watched/read activity, and each member's activity-sharing choice. Neo4j is synchronized from Neon using pseudonymous Clerk IDs and `FAVORITED` / `WATCHED` relationships. The signed-in UI has catalog discovery, account-based favorites and activity, and personalized recommendations. Work-specific communities, discussion, chat, and media sharing are planned and not implemented.
 
 ## Intended architecture
 
@@ -17,8 +19,10 @@ Browser
   └── Vercel: React + TypeScript + Vite + CSS
         └── HTTPS API requests
               └── Render: Node.js + TypeScript + Fastify
-                    ├── Neo4j AuraDB: works, characters, tags, interactions, graph recommendations
-                    ├── Neon Postgres: account metadata, RBAC, audit and transactional records
+                    ├── Clerk: authentication and account identity
+                    ├── Neon Postgres: catalog, favorites, watched/read activity, sharing preferences
+                    ├── Neo4j AuraDB: synchronized graph of works, tags, and pseudonymous interactions
+                    ├── Object storage: uploaded community media (provider TBD)
                     └── Upstash Redis: cache, rate limits, short-lived coordination
 ```
 
@@ -26,13 +30,15 @@ Browser
 
 - **Frontend — Vercel:** static assets, browser delivery, preview deployments, and custom domains suit the React/Vite app. The UI remains accessible from any modern browser.
 - **Backend — Render:** a separately deployed Node.js/TypeScript API keeps secrets and database access server-side. Fastify is the proposed lightweight HTTP framework.
-- **Graph — Neo4j AuraDB:** model recommendation and community relationships and execute Cypher traversals. Select a plan based on availability, data retention, and expected workload before production.
-- **Relational database — Neon Postgres:** store account and role metadata, audit events, and records requiring relational constraints and transactions.
+- **Identity — Clerk:** authenticate members and provide stable account IDs. Do not copy passwords or unnecessary personal information into application databases.
+- **Graph — Neo4j AuraDB:** hold the synchronized work/tag graph and the minimal, privacy-eligible interactions needed for recommendations and relationship queries.
+- **Relational database — Neon Postgres:** source of truth for the work catalog, favorites, watched/completed activity, community posts, membership, moderation records, and relational constraints.
+- **Media storage — provider TBD:** store uploaded image/video files outside Postgres and Neo4j; keep durable file metadata and ownership in Postgres.
 - **Cache — Upstash Redis:** cache expensive reads and apply API rate limits using a managed Redis-compatible service.
 
 Pricing and free-tier limits change. Re-check each provider's current limits, sleeping/cold-start behavior, backups, and data-retention policies before launch. Do not treat free tiers as a production availability commitment.
 
-The initial catalog is stored in Neon/Postgres. Neo4j remains an optional API dependency until recommendation and relationship queries are implemented; a configured Postgres connection is enough to run the API today.
+The catalog and account activity are stored in Neon/Postgres. Neo4j is a derived graph for recommendation queries, not a second catalog or activity store that members or maintainers update independently. Reconcile the graph from Neon after catalog or interaction changes. If graph synchronization is unavailable, Neon remains authoritative and the graph can be rebuilt.
 
 ## Product scope
 
@@ -41,73 +47,86 @@ The initial catalog is stored in Neon/Postgres. Neo4j remains an optional API de
 - Browse GL works across manga, manhwa, light novels, and live-action series.
 - Search works, creators, characters, users, tags, and discussion content.
 - Filter by format, genre, and tropes such as slow burn, office romance, fantasy, music, and coming of age.
-- Maintain a personal list and record interactions such as liking, rating, favoriting, or completing a work.
+- Maintain an account-only favorites list and mark works watched/read. Favorite and watched/read activity are distinct actions.
 
 ### Recommendations and affinity
 
-- Recommend not-yet-interacted-with works using shared-interest signals and graph paths.
-- Calculate user affinity from overlapping favorite works, characters, and tags, with transparent factor weights and a minimum-overlap safeguard.
-- Treat affinity as an optional community discovery aid. Do not infer sensitive traits or present a percentage as objective compatibility.
-- Apply privacy controls so users decide whether their profile and interaction signals can be used for matching.
+- Rank each recommendation with a transparent weighted score:
+  - **35% tag fit:** how well a candidate work's tags match the member's demonstrated tag interests.
+  - **65% similar-member activity:** candidate favorites and watched/read works from similar members, with each neighbor's contribution weighted by that neighbor's match score. Favorite evidence has weight 2; watched/read evidence has weight 1.
+- The user's tag-fit profile also weights favorite works 2 and watched/read works 1. Tag fit is the share of the user's total weighted tag-interest mass represented by the candidate's tags.
+- Member-to-member similarity is weighted Jaccard over work interactions: sum of minimum shared interaction weights divided by sum of maximum weights across the union. This normalization prevents prolific users from dominating by raw activity volume.
+- For a candidate, the similar-member component is `100 × sum(matchScore × candidateActivityWeight) / sum(matchScore × 2)` across eligible neighbors. Each neighbor contributes at most once per candidate; a favorite has weight 2 and watched/read has weight 1. Both component scores are 0–100 and the final score is `0.35 × tagFit + 0.65 × similarMemberActivity`.
+- Exclude a member's own favorites and watched/read works from recommendations. Favorites are an interest signal, not proof that the member consumed a work.
+- Members explicitly opt in before their activity can inform recommendations for other members. Their own recommendations can still use their own activity when sharing is disabled. With no eligible similar-member evidence, clearly label a tag-fit-only cold-start ranking instead of inventing a collaborative score.
+- Treat recommendations as optional discovery aids. Do not infer sensitive traits or present match percentages as objective compatibility. Account activity remains in Neon and recommendation-sharing preference can be changed at any time.
 
 ### Community
 
-- Provide work- and character-specific community spaces.
-- Support threaded discussions, spoiler labeling, reporting, moderation, and administrative actions.
-- Establish community guidelines, moderation workflows, and abuse-report handling before opening public posting.
+- Provide one persistent community space for every catalog work, reachable from that work's details.
+- Support real-time or near-real-time chat as well as durable threaded discussions, spoiler labels, and member reactions.
+- Let members attach and share permitted media in a work community. Store files in object storage and metadata/permissions in Postgres, not as large database blobs or graph properties.
+- Add membership/access controls, reporting, blocking, moderation queues, admin actions, and community guidelines before enabling public posting or uploads.
+- Define upload size/type limits, malware/content scanning, abuse response, copyright handling, retention, and deletion behavior before accepting media.
 
 ### Identity and safety
 
-- Support account registration, sign-in, and revocation/rotation for short-lived access and refresh credentials.
+- Use Clerk for account registration and sign-in; verify its session tokens on every protected API route.
 - Enforce role-based authorization on the API for members, moderators, and administrators; hiding a UI control is not authorization.
-- Hash passwords with a well-maintained password-hashing library if password-based registration is enabled; prefer a vetted identity provider if the project does not want to operate password security itself.
 - Validate and authorize every request server-side, rate-limit sensitive endpoints, and keep secrets out of browser bundles and source control.
 
 ## Initial graph model
 
 ```text
 (:User {id, username})
-  -[:LIKED {rating, createdAt}]-> (:GL_Work {id, title, type})
-  -[:COMPLETED {completedAt}]-> (:GL_Work)
+  -[:FAVORITED {createdAt}]-> (:GL_Work {id, title, type})
+  -[:WATCHED {status, startedAt, completedAt}]-> (:GL_Work)
+  -[:LIKED {rating, createdAt}]-> (:GL_Work)
   -[:FAVORITED_CHARACTER {createdAt}]-> (:Character {id, name, role})
   -[:CREATED_THREAD {createdAt}]-> (:CommunityThread {id, title})
 
 (:GL_Work)-[:HAS_CHARACTER]->(:Character)
 (:GL_Work)-[:HAS_TAG]->(:Tag {name})
+(:GL_Work)-[:HAS_COMMUNITY]->(:WorkCommunity {id})
+(:WorkCommunity)-[:HAS_THREAD]->(:CommunityThread {id, title})
+(:CommunityThread)-[:HAS_REPLY]->(:CommunityPost {id, body, createdAt})
+(:CommunityPost)-[:ATTACHES]->(:MediaAsset {id, storageKey, mediaType})
 (:CommunityThread)-[:BELONGS_TO]->(:GL_Work)
 (:CommunityThread)-[:ABOUT_CHARACTER]->(:Character)
 (:User)-[:FOLLOWS]->(:User)
 ```
 
-Use stable IDs and uniqueness constraints for primary entities. Store dates and interaction metadata on relationships where the event itself is the relationship; consider event nodes if interaction history, provenance, or moderation/audit needs outgrow relationship properties. Keep personally identifying account details in Postgres and only put the minimal pseudonymous graph identity and opted-in recommendation signals in Neo4j.
+Use stable IDs and uniqueness constraints for primary entities. Neon owns the durable community content, membership, moderation state, and media metadata; object storage owns media bytes. Neo4j may mirror only relationships needed for discovery and recommendations. Keep personally identifying account details out of the graph and use only minimal pseudonymous IDs and opted-in signals.
 
-## Recommendation query sketch
+## Recommendation scoring and query sketch
 
-This is an illustrative first-pass query, not production-ready ranking. Add privacy eligibility, minimum interaction thresholds, de-duplication, recency/quality signals, pagination, and query-plan checks before serving it at scale.
+The ranking contract is a 35% tag-fit component and a 65% collaborative activity component. Favorite interactions weigh twice as much as watched/read interactions (2 vs. 1). Let `tagFit(user, work)` be the share of the user's weighted tag-interest mass covered by the candidate's tags. Let `match(user, neighbor)` be weighted Jaccard overlap across favorite and watched/read work interactions. The collaborative score weights each eligible neighbor by this match, with a favorite candidate signal weighted 2 and a watched/read signal weighted 1:
 
-```cypher
-MATCH (u1:User {id: $currentUserId})-[:LIKED]->(shared:GL_Work)<-[:LIKED]-(u2:User)
-WHERE u1 <> u2
-WITH u1, u2, count(DISTINCT shared) AS commonLikes
-ORDER BY commonLikes DESC
-LIMIT 5
-MATCH (u2)-[:LIKED]->(candidate:GL_Work)
-WHERE NOT (u1)-[:LIKED|COMPLETED]->(candidate)
-WITH candidate, sum(commonLikes) AS neighborScore
-RETURN candidate, neighborScore
-ORDER BY neighborScore DESC
-LIMIT 10
+```text
+similarMemberActivity =
+  100 × sum(match(user, neighbor) × candidateActivityWeight)
+      / sum(match(user, neighbor) × 2)
+
+recommendationScore =
+  0.35 × tagFit(user, candidate)
+  + 0.65 × similarMemberActivity(user, candidate)
 ```
 
-For a more meaningful similarity ranking, normalize shared interactions using a Jaccard score (`intersection / union`) or cosine similarity; do not rank solely by raw shared-like counts, which favor highly active users. Apply genre/tag filters in the graph query and verify indexes and query plans with representative data.
+Deduplicate each member's interaction per work, exclude already-favorited and watched/read works, and include other members' signals only when they have opted in. A missing collaborative signal uses a clearly labeled tag-only cold-start ranking. Add pagination, recency/quality safeguards, and query-plan checks before serving at scale.
+
+The API implements this score in application code after retrieving the eligible
+catalog and graph interactions. Only signed-in requests can access
+`GET /api/recommendations`; its identity comes from the verified Clerk token.
+The separate `GET /api/works/:workId/similar` endpoint remains a public,
+tag-overlap utility and does not expose account data.
 
 ## Delivery milestones
 
-1. **Foundation (current):** responsive discovery prototype, Fastify API, validated Postgres catalog endpoint, repeatable starter-catalog setup, optional AniList import with human review gating, local search/filter/save interactions, product scope, and setup documentation.
-2. **API and persistence:** provision Neon for shared development/production and add account/user data access; provision Neo4j when graph-backed features begin.
-3. **Accounts and controls:** authentication, session/refresh-token lifecycle, RBAC, profile privacy settings, request validation, and rate limiting.
-4. **Graph discovery:** write and test graph queries for search, filtering, recommendations, and explainable match scores.
-5. **Community:** threads, nested comments, spoiler controls, reporting, moderation, and community guidelines.
+1. **Foundation (implemented in part):** discovery UI, Fastify API, Neon catalog, AniList import/review, Clerk sign-in, persistent favorites, and Neon-to-Neo4j synchronization.
+2. **Activity tracking (implemented):** authenticated watched/read toggles, durable Neon records, and per-member activity-sharing opt-in.
+3. **Recommendation ranking (implemented):** tested tag-fit and weighted-Jaccard calculations; 35/65 score; favorites at 2× watched/read; score explanations; tag-only cold start; and opt-in neighbor eligibility.
+4. **Work communities:** create a community for every work; implement durable threaded discussion and spoiler controls, then chat if realtime behavior is needed.
+5. **Media and trust/safety:** choose object storage, add secure uploads, community membership, reports, moderation tooling, blocking, retention/deletion, and operating guidelines before broad launch.
 6. **Production readiness:** observability, backups and restore exercises, security review, accessibility audit, load testing, and deployment automation.
 
 ## Repository conventions and safeguards
@@ -115,14 +134,14 @@ For a more meaningful similarity ranking, normalize shared interactions using a 
 - Keep the UI and API independently deployable; only the API connects to databases or Redis.
 - Validate input at service boundaries and use parameterized Cypher and SQL.
 - Never commit connection strings, access tokens, signing keys, or production data.
-- Establish consent, privacy, deletion, and retention behavior before using member activity for recommendations.
+- Keep activity-sharing opt-in explicit and provide a future account-deletion flow that removes Neon and Neo4j activity together.
 - Use original artwork or properly licensed assets. Current remote Unsplash images are temporary visual placeholders, not GL work covers.
-- Add automated tests with each backend capability; test recommendation edge cases with fixtures before trusting the ranking.
+- Add automated tests with each backend capability; recommendation tests cover both score components, the 35/65 final score, no-neighbor cold starts, opt-in eligibility, duplicate activity, and exclusion of a member's own works.
 
 ## Open decisions before public launch
 
-- Choose a trusted identity provider or define the owned password, email verification, recovery, and credential-rotation flow.
-- Decide whether community profiles and recommendation signals are private by default, and how opt-out/deletion propagates across databases and caches.
+- Define account deletion so it removes Neon and Neo4j activity together; recommendation activity sharing is opt-in and may be disabled at any time.
 - Select provider tiers after estimating monthly active users, API throughput, graph size, retention, backups, and service availability requirements.
-- Confirm content data sources, attribution/licensing, moderation coverage, community guidelines, and spoiler defaults.
+- Expand the simple watched/read marker to format-specific progress statuses if the product needs currently-reading or completion tracking.
+- Choose the media-storage provider and define upload types/limits, moderation coverage, community guidelines, and spoiler defaults.
 - Define the first supported locales and accessibility target; the current prototype is English-language.

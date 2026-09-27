@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/recommendations/scoring.test.ts",
     "db:import-anilist": "tsx src/db/import-anilist.ts",
     "db:seed-graph": "tsx src/db/neo4j-seed.ts",
     "db:filter-yuri": "tsx src/db/filter-yuri.ts",

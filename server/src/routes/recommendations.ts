@@ -8,14 +8,22 @@
 import type { FastifyInstance } from "fastify";
 import neo4j from "neo4j-driver";
 import { z } from "zod";
+import { loadConfig } from "../config.js";
+import {
+  filterEligibleInteractions,
+  rankPersonalizedWorks,
+  type RecommendationWork,
+  type WorkInteraction,
+} from "../recommendations/scoring.js";
+import { authenticateUser } from "./auth.js";
+import { syncUserGraph } from "./user-graph-sync.js";
 
 const SimilarWorksSchema = z.object({
   workId: z.string().min(1),
   limit: z.coerce.number().int().min(1).max(20).default(6),
 });
 
-const UserRecommendationsSchema = z.object({
-  userId: z.string().min(1),
+const RecommendationLimitSchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 
@@ -28,6 +36,119 @@ function toJsonNumber(value: unknown): number {
 export default async function recommendationRoutes(
   fastify: FastifyInstance
 ): Promise<void> {
+  const config = loadConfig();
+
+  fastify.get("/api/recommendations", async (request, reply) => {
+    const userId = await authenticateUser(fastify, config, request, reply);
+    if (!userId) return;
+
+    const parsed = RecommendationLimitSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid request",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const driver = fastify.neo4j;
+    if (!driver) {
+      return reply.code(503).send({ error: "Recommendation graph is not configured." });
+    }
+    if (!(await syncUserGraph(fastify, userId))) {
+      return reply.code(503).send({ error: "Recommendation graph is not synchronized." });
+    }
+
+    const catalogRows = await fastify.postgres`
+      SELECT id, title, format, tags
+      FROM works
+      WHERE curation_status = 'approved'
+        AND EXISTS (
+          SELECT 1
+          FROM unnest(tags[1:6]) AS tag
+          WHERE lower(tag) IN ('yuri', 'shoujo ai')
+        )
+    `;
+    const optedInRows = await fastify.postgres`
+      SELECT user_id
+      FROM recommendation_preferences
+      WHERE share_activity = true
+    `;
+    const optedInUserIds = new Set(optedInRows.map((row) => String(row.user_id)));
+    const workById = new Map<string, RecommendationWork>();
+    for (const row of catalogRows) {
+      if (!Array.isArray(row.tags) || !row.tags.every((tag) => typeof tag === "string")) {
+        throw new Error(`Invalid tags returned for recommendation work ${String(row.id)}`);
+      }
+      workById.set(String(row.id), {
+        id: String(row.id),
+        title: String(row.title),
+        format: String(row.format),
+        tags: row.tags,
+      });
+    }
+
+    const session = driver.session();
+    try {
+      const result = await session.run(
+        `MATCH (u:User)-[r]->(w:GL_Work)
+         WHERE type(r) IN ['FAVORITED', 'WATCHED']
+         RETURN u.id AS userId, w.id AS workId, type(r) AS kind`,
+      );
+      const interactions: WorkInteraction[] = result.records.flatMap((record) => {
+        const interactionUserId: unknown = record.get("userId");
+        const workId: unknown = record.get("workId");
+        const kind: unknown = record.get("kind");
+        if (
+          typeof interactionUserId !== "string" ||
+          typeof workId !== "string" ||
+          !workById.has(workId) ||
+          (kind !== "FAVORITED" && kind !== "WATCHED")
+        ) {
+          return [];
+        }
+        return [{
+          userId: interactionUserId,
+          workId,
+          kind: kind === "FAVORITED" ? "favorite" : "watched",
+        }];
+      });
+      const eligibleInteractions = filterEligibleInteractions(
+        userId,
+        optedInUserIds,
+        interactions,
+      );
+
+      const ranked = rankPersonalizedWorks(
+        userId,
+        [...workById.values()],
+        eligibleInteractions,
+        parsed.data.limit,
+      );
+      return ranked;
+    } finally {
+      await session.close();
+    }
+  });
+
+  fastify.put("/api/recommendations/participation", async (request, reply) => {
+    const userId = await authenticateUser(fastify, config, request, reply);
+    if (!userId) return;
+    const parsed = z.object({ shareActivity: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid request",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const rows = await fastify.postgres`
+      INSERT INTO recommendation_preferences (user_id, share_activity, updated_at)
+      VALUES (${userId}, ${parsed.data.shareActivity}, now())
+      ON CONFLICT (user_id)
+      DO UPDATE SET share_activity = EXCLUDED.share_activity, updated_at = now()
+      RETURNING share_activity
+    `;
+    return { shareActivity: Boolean(rows[0]?.share_activity) };
+  });
+
   /**
    * GET /api/works/:workId/similar
    *
@@ -85,63 +206,6 @@ export default async function recommendationRoutes(
   });
 
   /**
-   * GET /api/users/:userId/recommendations
-   *
-   * Collaborative filtering: finds works liked by users with similar
-   * taste, excluding works the current user already liked.
-   */
-  fastify.get("/api/users/:userId/recommendations", async (request, reply) => {
-    const params = request.params as { userId: string };
-    const query = request.query as { limit?: string };
-    const parsed = UserRecommendationsSchema.safeParse({ ...params, ...query });
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid request",
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-
-    const { userId, limit } = parsed.data;
-
-    const driver = fastify.neo4j;
-    if (!driver) throw new Error("Neo4j not initialized");
-
-    const session = driver.session();
-    try {
-      const result = await session.run(
-        /* Cypher */ `
-          MATCH (u1:User {id: $userId})-[:LIKED]->(shared:GL_Work)<-[:LIKED]-(u2:User)
-          WHERE u1 <> u2
-          WITH u1, u2, count(DISTINCT shared) AS commonLikes
-          ORDER BY commonLikes DESC
-          LIMIT 5
-          MATCH (u2)-[:LIKED]->(candidate:GL_Work)
-          WHERE NOT (u1)-[:LIKED]->(candidate)
-          WITH candidate, sum(commonLikes) AS neighborScore
-          ORDER BY neighborScore DESC
-          LIMIT $limit
-          RETURN candidate.id AS id,
-                 candidate.title AS title,
-                 candidate.format AS format,
-                 neighborScore
-        `,
-        { userId, limit: neo4j.int(limit) }
-      );
-
-      const recommendations = result.records.map((record) => ({
-        id: record.get("id"),
-        title: record.get("title"),
-        format: record.get("format"),
-        neighborScore: toJsonNumber(record.get("neighborScore")),
-      }));
-
-      return { userId, recommendations };
-    } finally {
-      await session.close();
-    }
-  });
-
-  /**
    * GET /api/users/:userId/matches/:workId
    *
    * Explainable match score between a user and a work.
@@ -150,6 +214,11 @@ export default async function recommendationRoutes(
   fastify.get("/api/users/:userId/matches/:workId", async (request, reply) => {
     const params = request.params as { userId: string; workId: string };
     const { userId, workId } = params;
+    const authenticatedUserId = await authenticateUser(fastify, config, request, reply);
+    if (!authenticatedUserId) return;
+    if (authenticatedUserId !== userId) {
+      return reply.code(403).send({ error: "You can only view your own match scores." });
+    }
 
     const driver = fastify.neo4j;
     if (!driver) throw new Error("Neo4j not initialized");
@@ -158,7 +227,7 @@ export default async function recommendationRoutes(
     try {
       const result = await session.run(
         /* Cypher */ `
-          MATCH (u:User {id: $userId})-[:LIKED]->(liked:GL_Work)-[:HAS_TAG]->(t:Tag)
+          MATCH (u:User {id: $userId})-[:FAVORITED|WATCHED]->(liked:GL_Work)-[:HAS_TAG]->(t:Tag)
           WITH u, collect(DISTINCT t.name) AS userTags
           MATCH (w:GL_Work {id: $workId})-[:HAS_TAG]->(wt:Tag)
           WITH u, userTags, w, collect(DISTINCT wt.name) AS workTags

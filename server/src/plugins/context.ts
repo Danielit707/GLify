@@ -8,7 +8,12 @@ import type { FastifyInstance } from "fastify";
 import { loadConfig } from "../config.js";
 import { initPostgres, closePostgres } from "../db/postgres.js";
 import { initNeo4j, closeNeo4j } from "../db/neo4j.js";
-import { syncCatalogGraph, type GraphFavorite, type GraphWork } from "../db/graph-sync.js";
+import {
+  syncCatalogGraph,
+  type GraphFavorite,
+  type GraphWatchedWork,
+  type GraphWork,
+} from "../db/graph-sync.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -58,15 +63,25 @@ export default fp(async function contextPlugin(
           ? [{ userId: String(row.user_id), work }]
           : [];
       });
+      const watchedRows = await postgresClient`
+        SELECT user_id, work_id
+        FROM watched_works
+        ORDER BY user_id, created_at
+      `;
+      const watchedWorks: GraphWatchedWork[] = watchedRows.flatMap((row) => {
+        const work = workById.get(String(row.work_id));
+        return work ? [{ userId: String(row.user_id), work }] : [];
+      });
 
       const counts = await syncCatalogGraph(
         neo4jDriver,
         [...workById.values()],
         favorites,
+        watchedWorks,
       );
       fastify.log.info(
         { ...counts },
-        "Synchronized Neo4j catalog and account favorites from Postgres",
+        "Synchronized Neo4j catalog and account interactions from Postgres",
       );
     } catch (error) {
       fastify.log.error(

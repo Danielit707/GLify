@@ -8,27 +8,44 @@ const WorkParamsSchema = z.object({
   workId: z.string().trim().min(1).max(200),
 });
 
-export default async function favoriteRoutes(fastify: FastifyInstance): Promise<void> {
+export default async function activityRoutes(fastify: FastifyInstance): Promise<void> {
   const config = loadConfig();
 
-  fastify.get("/api/favorites", async (request, reply) => {
+  fastify.get("/api/library", async (request, reply) => {
     const userId = await authenticateUser(fastify, config, request, reply);
     if (!userId) return;
 
-    const rows = await fastify.postgres`
-      SELECT work_id
-      FROM favorites
-      WHERE user_id = ${userId}
-      ORDER BY created_at DESC, work_id ASC
+    await fastify.postgres`
+      INSERT INTO recommendation_preferences (user_id)
+      VALUES (${userId})
+      ON CONFLICT (user_id) DO NOTHING
     `;
+    const [favoriteRows, watchedRows, preferenceRows] = await Promise.all([
+      fastify.postgres`
+        SELECT work_id FROM favorites
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC, work_id ASC
+      `,
+      fastify.postgres`
+        SELECT work_id FROM watched_works
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC, work_id ASC
+      `,
+      fastify.postgres`
+        SELECT share_activity FROM recommendation_preferences
+        WHERE user_id = ${userId}
+      `,
+    ]);
     const graphSynced = await syncUserGraph(fastify, userId);
     return {
-      favorites: rows.map((row) => String(row.work_id)),
+      favorites: favoriteRows.map((row) => String(row.work_id)),
+      watched: watchedRows.map((row) => String(row.work_id)),
+      shareActivity: Boolean(preferenceRows[0]?.share_activity),
       graphSynced,
     };
   });
 
-  fastify.put("/api/favorites/:workId", async (request, reply) => {
+  fastify.put("/api/activity/:workId", async (request, reply) => {
     const userId = await authenticateUser(fastify, config, request, reply);
     if (!userId) return;
 
@@ -39,24 +56,20 @@ export default async function favoriteRoutes(fastify: FastifyInstance): Promise<
         details: parsed.error.flatten().fieldErrors,
       });
     }
-
-    const work = await fastify.postgres`
+    const workRows = await fastify.postgres`
       SELECT id FROM works WHERE id = ${parsed.data.workId}
     `;
-    if (work.length === 0) {
-      return reply.code(404).send({ error: "Work not found." });
-    }
+    if (workRows.length === 0) return reply.code(404).send({ error: "Work not found." });
 
     await fastify.postgres`
-      INSERT INTO favorites (user_id, work_id)
+      INSERT INTO watched_works (user_id, work_id)
       VALUES (${userId}, ${parsed.data.workId})
       ON CONFLICT (user_id, work_id) DO NOTHING
     `;
-    const graphSynced = await syncUserGraph(fastify, userId);
-    return reply.send({ graphSynced });
+    return reply.send({ graphSynced: await syncUserGraph(fastify, userId) });
   });
 
-  fastify.delete("/api/favorites/:workId", async (request, reply) => {
+  fastify.delete("/api/activity/:workId", async (request, reply) => {
     const userId = await authenticateUser(fastify, config, request, reply);
     if (!userId) return;
 
@@ -67,12 +80,10 @@ export default async function favoriteRoutes(fastify: FastifyInstance): Promise<
         details: parsed.error.flatten().fieldErrors,
       });
     }
-
     await fastify.postgres`
-      DELETE FROM favorites
+      DELETE FROM watched_works
       WHERE user_id = ${userId} AND work_id = ${parsed.data.workId}
     `;
-    const graphSynced = await syncUserGraph(fastify, userId);
-    return reply.send({ graphSynced });
+    return reply.send({ graphSynced: await syncUserGraph(fastify, userId) });
   });
 }

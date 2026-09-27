@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Compass,
+  Eye,
   Flame,
   Heart,
   Menu,
@@ -23,11 +24,32 @@ type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
 interface AppProps {
   accountStatus?: AccountStatus;
   savedIds?: string[];
+  watchedIds?: string[];
+  recommendations?: PersonalizedRecommendation[];
+  recommendationsLoading?: boolean;
+  recommendationsError?: string | null;
+  recommendationsColdStart?: boolean;
+  shareActivity?: boolean;
+  participationPending?: boolean;
   favoritesLoading?: boolean;
   favoritesError?: string | null;
   graphSyncPending?: boolean;
   pendingFavoriteId?: string | null;
+  pendingWatchedId?: string | null;
   onToggleFavorite?: (id: string) => void;
+  onToggleWatched?: (id: string) => void;
+  onSetRecommendationParticipation?: (enabled: boolean) => void;
+}
+
+export interface PersonalizedRecommendation {
+  id: string;
+  title: string;
+  format: string;
+  tagFitScore: number;
+  similarMemberScore: number;
+  recommendationScore: number;
+  sharedTags: string[];
+  similarMemberCount: number;
 }
 
 const communities = [
@@ -87,13 +109,19 @@ function WorkCard({
   saved,
   accountStatus,
   pending,
+  watched,
+  watchPending,
   onToggleFavorite,
+  onToggleWatched,
 }: {
   work: Work;
   saved: boolean;
   accountStatus: AccountStatus;
   pending: boolean;
+  watched: boolean;
+  watchPending: boolean;
   onToggleFavorite: (id: string) => void;
+  onToggleWatched: (id: string) => void;
 }) {
   const saveButton = (
     <button
@@ -140,108 +168,145 @@ function WorkCard({
         <div className="tag-row">
           {work.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
         </div>
+        <div className="work-actions">
+          {accountStatus === "signed-out" ? (
+            <SignInButton mode="modal">
+              <button
+                className={`watched-button${watched ? " is-watched" : ""}`}
+                type="button"
+                aria-label={`Sign in to mark ${work.title} watched or read`}
+                disabled={watchPending}
+              >
+                <Eye size={14} /> Mark watched / read
+              </button>
+            </SignInButton>
+          ) : (
+            <button
+              className={`watched-button${watched ? " is-watched" : ""}`}
+              type="button"
+              aria-label={`${watched ? "Remove" : "Mark"} ${work.title} ${watched ? "from" : "as"} watched or read`}
+              aria-pressed={watched}
+              disabled={accountStatus !== "signed-in" || watchPending}
+              onClick={() => onToggleWatched(work.id)}
+            >
+              {watched ? <Check size={14} /> : <Eye size={14} />}
+              {watched ? "Watched / read" : "Mark watched / read"}
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );
 }
 
-interface SimilarWork {
-  id: string;
-  title: string;
-  format: string;
-  sharedTags: number;
-  sharedTagNames: string[];
-  matchScore: number;
-}
-
-function isSimilarWork(value: unknown): value is SimilarWork {
-  if (typeof value !== "object" || value === null) return false;
-  const work = value as Record<string, unknown>;
-  return (
-    typeof work.id === "string" &&
-    typeof work.title === "string" &&
-    typeof work.format === "string" &&
-    typeof work.sharedTags === "number" &&
-    Number.isFinite(work.sharedTags) &&
-    Array.isArray(work.sharedTagNames) &&
-    work.sharedTagNames.every((tag) => typeof tag === "string") &&
-    typeof work.matchScore === "number" &&
-    Number.isFinite(work.matchScore)
-  );
-}
-
-function isSimilarWorksResponse(
-  value: unknown,
-): value is { recommendations: SimilarWork[] } {
-  if (typeof value !== "object" || value === null) return false;
-  const response = value as Record<string, unknown>;
-  return (
-    Array.isArray(response.recommendations) &&
-    response.recommendations.every(isSimilarWork)
-  );
-}
-
-function SimilarWorks({ workId }: { workId: string }) {
-  const [similar, setSimilar] = useState<SimilarWork[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
-
-    fetch(`${apiBase}/api/works/${workId}/similar?limit=4`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Failed to load similar works");
-        const data: unknown = await response.json();
-        if (!isSimilarWorksResponse(data)) {
-          throw new Error("Similar works API returned an unexpected response.");
-        }
-        setSimilar(data.recommendations);
-        setLoading(false);
-      })
-      .catch(() => {
-        setSimilar([]);
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [workId]);
-
-  if (loading || similar.length === 0) return null;
+function PersonalizedRecommendations({
+  accountStatus,
+  recommendations,
+  loading,
+  error,
+  coldStart,
+  shareActivity,
+  participationPending,
+  onSetRecommendationParticipation,
+}: {
+  accountStatus: AccountStatus;
+  recommendations: PersonalizedRecommendation[];
+  loading: boolean;
+  error: string | null;
+  coldStart: boolean;
+  shareActivity: boolean;
+  participationPending: boolean;
+  onSetRecommendationParticipation: (enabled: boolean) => void;
+}) {
+  if (accountStatus === "disabled") return null;
 
   return (
-    <div className="similar-works">
-      <h3>Similar stories</h3>
-      <div className="similar-grid">
-        {similar.map((work) => (
-          <div className="similar-card" key={work.id}>
-            <span className="similar-format">{work.format}</span>
-            <h4>{work.title}</h4>
-            <p className="similar-match">
-              <Sparkles size={11} /> {work.matchScore}% match — shares {work.sharedTags} tag{work.sharedTags !== 1 ? "s" : ""}
+    <section className="similar-works" aria-labelledby="recommendations-title">
+      <h3 id="recommendations-title">Picked for you</h3>
+      <p className="recommendation-intro">
+        Recommendations combine 35% tag fit and 65% activity from members with similar interests.
+      </p>
+      {accountStatus === "signed-in" && (
+        <label className="recommendation-sharing">
+          <input
+            type="checkbox"
+            checked={shareActivity}
+            disabled={participationPending}
+            onChange={(event) => onSetRecommendationParticipation(event.target.checked)}
+          />
+          <span>
+            Let my favorites and watched/read list help recommend stories to similar members.
+            You can change this any time; it does not affect your own recommendations.
+          </span>
+        </label>
+      )}
+      {accountStatus === "signed-out" ? (
+        <p className="favorites-prompt">Sign in to build personalized recommendations from your favorites and watched/read list.</p>
+      ) : loading ? (
+        <p className="favorites-prompt" role="status">Finding stories for you…</p>
+      ) : error ? (
+        <p className="favorites-error" role="alert">{error}</p>
+      ) : recommendations.length === 0 ? (
+        <p className="favorites-prompt">
+          Add favorites or mark stories watched/read to start building your recommendations.
+        </p>
+      ) : (
+        <>
+          {coldStart && (
+            <p className="favorites-prompt">
+              There are not enough similar-member signals yet, so these are ranked by tag fit for now.
             </p>
-            <div className="tag-row">
-              {work.sharedTagNames.slice(0, 3).map((tag) => (
-                <span className="tag" key={tag}>{tag}</span>
-              ))}
-            </div>
+          )}
+          <div className="similar-grid">
+            {recommendations.map((work) => (
+              <article className="similar-card" key={work.id}>
+                <span className="similar-format">{work.format}</span>
+                <h4>{work.title}</h4>
+                <p className="similar-match">
+                  <Sparkles size={11} /> {work.recommendationScore.toFixed(1)}% overall match
+                </p>
+                <p className="recommendation-components">
+                  35% tags: {work.tagFitScore.toFixed(1)}% · 65% similar-member activity: {work.similarMemberScore.toFixed(1)}%
+                </p>
+                {!coldStart && (
+                  <p className="recommendation-components">
+                    Informed by {work.similarMemberCount} similar member{work.similarMemberCount === 1 ? "" : "s"}
+                  </p>
+                )}
+                {work.sharedTags.length > 0 && (
+                  <div className="tag-row">
+                    {work.sharedTags.slice(0, 3).map((tag) => (
+                      <span className="tag" key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
-        ))}
-      </div>
-    </div>
+        </>
+      )}
+    </section>
   );
 }
 
 function App({
   accountStatus = "disabled",
   savedIds = [],
+  watchedIds = [],
+  recommendations = [],
+  recommendationsLoading = false,
+  recommendationsError = null,
+  recommendationsColdStart = false,
+  shareActivity = false,
+  participationPending = false,
   favoritesLoading = false,
   favoritesError = null,
   graphSyncPending = false,
   pendingFavoriteId = null,
+  pendingWatchedId = null,
   onToggleFavorite = () => {},
+  onToggleWatched = () => {},
+  onSetRecommendationParticipation = () => {},
 }: AppProps) {
   const [catalogWorks, setCatalogWorks] = useState<Work[]>(import.meta.env.PROD ? [] : works);
   const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample" | "unavailable">("loading");
@@ -430,7 +495,7 @@ function App({
           )}
           {graphSyncPending && accountStatus === "signed-in" && (
             <p className="favorites-prompt" role="status">
-              Favorites are saved to your account; Neo4j is pending synchronization.
+              Your favorites and watched/read activity are saved; Neo4j is pending synchronization.
             </p>
           )}
           {activeNav === "My list" && accountStatus === "signed-out" && (
@@ -485,7 +550,10 @@ function App({
                   saved={savedIds.includes(work.id)}
                   accountStatus={accountStatus}
                   pending={favoritesLoading || pendingFavoriteId === work.id}
+                  watched={watchedIds.includes(work.id)}
+                  watchPending={favoritesLoading || pendingWatchedId === work.id}
                   onToggleFavorite={onToggleFavorite}
+                  onToggleWatched={onToggleWatched}
                 />
               ))}
             </div>
@@ -515,8 +583,17 @@ function App({
               )}
             </div>
           )}
-          {visibleWorks.length > 0 && (
-            <SimilarWorks workId={visibleWorks[0].id} />
+          {activeNav === "Discover" && (
+            <PersonalizedRecommendations
+              accountStatus={accountStatus}
+              recommendations={recommendations}
+              loading={favoritesLoading || recommendationsLoading}
+              error={recommendationsError}
+              coldStart={recommendationsColdStart}
+              shareActivity={shareActivity}
+              participationPending={participationPending}
+              onSetRecommendationParticipation={onSetRecommendationParticipation}
+            />
           )}
 
           <button className="more-button" type="button" onClick={() => window.alert("More recommendations are coming soon.")}>

@@ -13,6 +13,11 @@ export interface GraphFavorite {
   work: GraphWork;
 }
 
+export interface GraphWatchedWork {
+  userId: string;
+  work: GraphWork;
+}
+
 const CREATE_CONSTRAINTS = [
   "CREATE CONSTRAINT gl_work_id IF NOT EXISTS FOR (w:GL_Work) REQUIRE w.id IS UNIQUE",
   "CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE",
@@ -52,17 +57,26 @@ async function upsertWorks(session: Session, works: GraphWork[]): Promise<void> 
   );
 }
 
-async function replaceUserFavorites(
+async function replaceUserInteractions(
   session: Session,
   userId: string,
-  works: GraphWork[],
+  favorites: GraphWork[],
+  watchedWorks: GraphWork[],
 ): Promise<void> {
   await session.run("MERGE (:User {id: $userId})", { userId });
   await session.run(
-    `MATCH (:User {id: $userId})-[r:LIKED]->()
+    `MATCH (:User {id: $userId})-[r:FAVORITED|WATCHED]->()
      DELETE r`,
     { userId },
   );
+  await session.run(
+    `MATCH (:User {id: $userId})-[r:LIKED {isFavorite: true}]->()
+     DELETE r`,
+    { userId },
+  );
+  const works = [...new Map(
+    [...favorites, ...watchedWorks].map((work) => [work.id, work]),
+  ).values()];
   if (works.length === 0) return;
 
   await upsertWorks(session, works);
@@ -70,21 +84,28 @@ async function replaceUserFavorites(
     `UNWIND $workIds AS workId
      MATCH (u:User {id: $userId})
      MATCH (w:GL_Work {id: workId})
-     MERGE (u)-[r:LIKED]->(w)
-     SET r.isFavorite = true`,
-    { userId, workIds: works.map((work) => work.id) },
+     MERGE (u)-[:FAVORITED]->(w)`,
+    { userId, workIds: favorites.map((work) => work.id) },
+  );
+  await session.run(
+    `UNWIND $workIds AS workId
+     MATCH (u:User {id: $userId})
+     MATCH (w:GL_Work {id: workId})
+     MERGE (u)-[:WATCHED]->(w)`,
+    { userId, workIds: watchedWorks.map((work) => work.id) },
   );
 }
 
-export async function syncUserFavorites(
+export async function syncUserInteractions(
   driver: Driver,
   userId: string,
-  works: GraphWork[],
+  favorites: GraphWork[],
+  watchedWorks: GraphWork[],
 ): Promise<void> {
   const session = driver.session();
   try {
     await ensureConstraints(session);
-    await replaceUserFavorites(session, userId, works);
+    await replaceUserInteractions(session, userId, favorites, watchedWorks);
   } finally {
     await session.close();
   }
@@ -94,6 +115,7 @@ export async function syncCatalogGraph(
   driver: Driver,
   works: GraphWork[],
   favorites: GraphFavorite[],
+  watchedWorks: GraphWatchedWork[],
 ): Promise<{ workCount: number; userCount: number; favoriteCount: number }> {
   const session = driver.session();
   try {
@@ -106,6 +128,9 @@ export async function syncCatalogGraph(
     );
     await upsertWorks(session, works);
     await session.run(
+      "MATCH ()-[r:FAVORITED|WATCHED]->() DELETE r",
+    );
+    await session.run(
       "MATCH ()-[r:LIKED {isFavorite: true}]->() DELETE r",
     );
     await session.run(
@@ -115,26 +140,37 @@ export async function syncCatalogGraph(
       { seedUserIds: ["user-1", "user-2", "user-3", "user-4", "user-5"] },
     );
 
-    const userIds = [...new Set(favorites.map((favorite) => favorite.userId))];
+    const userIds = [...new Set([
+      ...favorites.map((favorite) => favorite.userId),
+      ...watchedWorks.map((watched) => watched.userId),
+    ])];
     if (userIds.length > 0) {
       await session.run(
         `UNWIND $userIds AS userId
          MERGE (:User {id: userId})`,
         { userIds },
       );
-      await session.run(
-        `UNWIND $favorites AS favorite
-         MATCH (u:User {id: favorite.userId})
-         MATCH (w:GL_Work {id: favorite.workId})
-         MERGE (u)-[r:LIKED]->(w)
-         SET r.isFavorite = true`,
-        {
-          favorites: favorites.map(({ userId, work }) => ({
+      for (const [interactions, relationship] of [
+        [favorites, "FAVORITED"],
+        [watchedWorks, "WATCHED"],
+      ] as const) {
+        if (interactions.length === 0) continue;
+        const cypher = relationship === "FAVORITED"
+          ? `UNWIND $interactions AS item
+             MATCH (u:User {id: item.userId})
+             MATCH (w:GL_Work {id: item.workId})
+             MERGE (u)-[:FAVORITED]->(w)`
+          : `UNWIND $interactions AS item
+             MATCH (u:User {id: item.userId})
+             MATCH (w:GL_Work {id: item.workId})
+             MERGE (u)-[:WATCHED]->(w)`;
+        await session.run(cypher, {
+          interactions: interactions.map(({ userId, work }) => ({
             userId,
             workId: work.id,
           })),
-        },
-      );
+        });
+      }
     }
 
     await session.run(

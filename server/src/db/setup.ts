@@ -176,6 +176,21 @@ async function setupDatabase(): Promise<void> {
           PRIMARY KEY (user_id, work_id)
         )
       `;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS watched_works (
+          user_id text NOT NULL,
+          work_id text NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (user_id, work_id)
+        )
+      `;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS recommendation_preferences (
+          user_id text PRIMARY KEY,
+          share_activity boolean NOT NULL DEFAULT false,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
 
       for (const work of seedWorks) {
         await transaction`

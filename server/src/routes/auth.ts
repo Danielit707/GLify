@@ -11,12 +11,12 @@ export async function authenticateUser(
   const authorization = request.headers.authorization;
   const token = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
   if (!token) {
-    reply.code(401).send({ error: "Sign in is required to manage favorites." });
+    reply.code(401).send({ error: "Sign in is required for this account feature." });
     return null;
   }
 
   if (!config.CLERK_SECRET_KEY) {
-    reply.code(503).send({ error: "Account favorites are not configured on the server." });
+    reply.code(503).send({ error: "Account features are not configured on the server." });
     return null;
   }
 

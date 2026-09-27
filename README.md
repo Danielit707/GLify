@@ -13,9 +13,30 @@ GLify is a community-first discovery platform for Girls' Love (GL) and Yuri medi
 
 - **Discovery** — Browse GL works across manga, manhwa, webtoons, light novels, live-action series, and anime
 - **Search & Filter** — Search by title, creator, genre, or tags; filter by format and genre
-- **Recommendations** — Graph-powered similar works and collaborative filtering (Neo4j)
-- **Community** — Series-specific community spaces (coming soon)
+- **Personalized recommendations** — Rank unseen and non-favorited works with 35% tag fit and 65% activity from similar members; favorites count twice as much as watched/read activity
+- **Personal library** — Save favorites and mark works watched/read while signed in; activity is stored per account
+- **Work communities** — A dedicated community for every work, with chat, discussions, and media sharing (planned)
 - **Responsive** — Works on desktop and mobile browsers
+
+## Recommendation behavior and communities
+
+Personalized recommendations combine two explainable signals:
+
+- **35% tag fit:** the proportion of a member's weighted tag interests present on a candidate work. Favorite works contribute weight 2; watched/read works contribute weight 1.
+- **65% similar-member activity:** similar members' activity on each candidate, weighted by their match with the current member. A favorite contributes weight 2 and watched/read activity contributes weight 1.
+
+The final score is `0.35 × tag fit + 0.65 × similar-member activity score`.
+Member similarity uses weighted Jaccard overlap across favorites (2) and
+watched/read works (1). Already-favorited and watched/read titles are excluded
+from suggestions. When there are no similar members with matching activity,
+the interface clearly falls back to tag-fit-only ranking. Users can separately
+opt in to let their favorites and watched/read list inform recommendations for
+other members; opting out does not disable their own recommendations.
+
+Every work is intended to have its own community for chat, threaded discussion,
+and sharing media. These work communities are not implemented yet. Before
+opening them publicly, GLify needs community membership and moderation,
+reporting and spoiler controls, plus secure media storage and upload rules.
 
 ## Technology Stack
 
@@ -26,14 +47,15 @@ GLify is a community-first discovery platform for Girls' Love (GL) and Yuri medi
 | API | Node.js, TypeScript, Fastify | Application API and business logic |
 | API hosting | Render | Web service for the TypeScript API |
 | Authentication | Clerk | Sign-in and account identity |
-| Relational data | Neon Postgres | Catalog and the source of truth for account favorites |
-| Graph | Neo4j AuraDB | Catalog graph and favorite relationships for recommendations |
+| Relational data | Neon Postgres | Catalog, favorites, watched/read activity, and recommendation-sharing preference |
+| Graph | Neo4j AuraDB | Synchronized catalog and pseudonymous interactions for recommendations |
 | Cache / rate limits | Upstash Redis | Short-lived cache, rate limiting, and ephemeral coordination |
 
 Clerk owns account identities; this app does not copy account records into Neon.
-Neon owns the catalog and favorites, while Neo4j is a synchronized graph used
-for recommendations. If Neo4j is unavailable, favorite changes remain stored
-in Neon and the graph can be synchronized again later. The web app and API are
+Neon owns the catalog, favorites, watched/read activity, and recommendation
+sharing preferences, while Neo4j is a synchronized graph used for
+recommendations. If Neo4j is unavailable, library changes remain stored in
+Neon and the graph can be synchronized again later. The web app and API are
 separate deployable services. Managed-service credentials belong only in the
 API environment and must never be exposed to browser code.
 
@@ -68,7 +90,7 @@ Open the local URL Vite prints (usually **http://localhost:5173**). The UI works
 To enable sign-in and sign-up, create a Clerk application and set
 `VITE_CLERK_PUBLISHABLE_KEY` in the repository-root `.env.local` file. This
 frontend variable does not belong in `server/.env`. Restart Vite after changing
-the key. To persist account favorites, also set `CLERK_SECRET_KEY` in
+the key. To persist account favorites and watched/read activity, also set `CLERK_SECRET_KEY` in
 `server/.env`; the server uses it to verify the user's session token.
 
 ### Run the API with Neon Postgres
@@ -82,14 +104,14 @@ the key. To persist account favorites, also set `CLERK_SECRET_KEY` in
    ```
 
 3. Set `DATABASE_URL` in `server/.env` to the full connection string from Neon Console → your project → **Connect**. Replace the entire example value; do not leave `<user>`, `<password>`, `<host>`, or any other placeholders in it. Set `CLERK_SECRET_KEY` to the secret key from your Clerk application.
-4. Create the catalog and favorites tables, then start both apps:
+4. Create or upgrade the catalog, favorites, watched/read activity, and recommendation-preference tables, then start both apps:
 
    ```bash
    npm run db:setup
    npm run dev:all
    ```
 
-5. Open **http://localhost:5173**. The catalog API returns approved works (up to 200 per request). Favorites are available only after signing in and are stored in Postgres per Clerk account. The API health check is at **http://localhost:3001/health** and the catalog endpoint is **http://localhost:3001/api/works**.
+5. Open **http://localhost:5173**. The catalog API returns approved works (up to 200 per request). Favorites and watched/read activity are available only after signing in and are stored in Postgres per Clerk account. The API health check is at **http://localhost:3001/health** and the catalog endpoint is **http://localhost:3001/api/works**.
 
 ### Import real titles from AniList
 
@@ -109,9 +131,11 @@ After importing titles while the API is already running, run
 `npm run db:seed-graph` to reconcile the entire Neo4j catalog and account
 favorites from Neon. The API also performs this reconciliation at startup.
 When a signed-in user opens their list or changes a favorite, their Neo4j user
-node and `LIKED` relationships are synchronized from Neon. Clerk remains the
-identity provider; Neon is the source of truth for favorites, and Neo4j is the
-recommendation graph.
+node and `FAVORITED` / `WATCHED` relationships are synchronized from Neon.
+Clerk remains the identity provider; Neon is the source of truth for account
+activity and Neo4j is the recommendation graph. Run `npm run db:setup` against
+the production Neon database before deploying this version so the new tables
+exist.
 
 ### Filter for yuri-tagged titles only
 
@@ -131,10 +155,11 @@ Removes works without "yuri" or "shoujo ai" in their first 6 tags from both Post
 | `npm run build` | Build the frontend for production |
 | `npm run build:server` | Build the API for production |
 | `npm run typecheck:server` | Type-check the API |
-| `npm run db:setup` | Create the catalog table and seed sample works |
+| `npm --prefix server test` | Test personalized recommendation scoring |
+| `npm run db:setup` | Create or upgrade catalog and account activity tables |
 | `npm run db:import-anilist` | Import yuri-tagged titles from AniList |
 | `npm run db:filter-yuri` | Remove works without yuri in first 6 tags |
-| `npm run db:seed-graph` | Reconcile Neo4j works and account favorites from Neon |
+| `npm run db:seed-graph` | Reconcile Neo4j works and account interactions from Neon |
 | `npm run preview` | Preview the production frontend build |
 
 ## Project Structure
@@ -151,8 +176,9 @@ glify/
 │   │   ├── app.ts          # App factory
 │   │   ├── config.ts       # Environment configuration
 │   │   ├── db/             # Database modules (Postgres, Neo4j)
+│   │   ├── recommendations/# Weighted recommendation scoring
 │   │   ├── plugins/        # Fastify plugins
-│   │   └── routes/         # API route handlers
+│   │   └── routes/         # API route handlers, including library/activity
 │   └── .env.example        # Environment template
 ├── images/                 # Screenshots and visual assets
 ├── scope.md                # Product scope and architecture
@@ -163,8 +189,9 @@ glify/
 
 1. **Frontend → Vercel:** Import the repository, set the project root to the repository root. Use `npm run build` and `dist` as the output directory. Set `VITE_API_URL` to the Render API origin and `VITE_CLERK_PUBLISHABLE_KEY` to the Clerk publishable key.
 2. **API → Render:** Deploy `server/` as a web service with the service root directory set to `server`. Use `npm install`, `npm run build`, and `npm start`. Configure `DATABASE_URL`, `CORS_ORIGIN`, `CLERK_SECRET_KEY`, and Neo4j credentials in Render's environment settings.
-3. **Neo4j AuraDB:** Configure the driver URI, username, and password in the API service's environment. The API synchronizes graph works from Neon at startup and updates user favorite relationships as they change.
-4. **Upstash Redis:** Configure managed Redis credentials only in the API service when cache/rate-limit features are implemented.
+3. **Neon schema:** Before deploying this API version, run `npm run db:setup` locally with `server/.env` pointed at the production Neon database. This safely creates the watched/read and activity-sharing tables alongside existing catalog/favorites data.
+4. **Neo4j AuraDB:** Configure the driver URI, username, and password in the API service's environment. The API synchronizes graph works from Neon at startup and updates user favorite/watched relationships as they change.
+5. **Upstash Redis:** Configure managed Redis credentials only in the API service when cache/rate-limit features are implemented.
 
 ## Contributing
 
