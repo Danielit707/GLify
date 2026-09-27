@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "npm --prefix server run dev",
+    "dev:all": "concurrently -k \"npm run dev\" \"npm run dev:server\"",
+    "db:setup": "npm --prefix server run db:setup",
     "build": "tsc -b && vite build",
+    "build:server": "npm --prefix server run build",
+    "typecheck:server": "npm --prefix server run typecheck",
+    "db:import-anilist": "npm --prefix server run db:import-anilist --",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -18,6 +24,7 @@
     "@types/react-dom": "^18.3.5",
     "@types/node": "^22.10.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
     "typescript": "~5.6.3",
     "vite": "^6.0.7"
   }

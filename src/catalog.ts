@@ -1,4 +1,4 @@
-export type Format = "Manga" | "Manhwa" | "Light novel" | "Live action";
+export type Format = "Manga" | "Manhwa" | "Light novel" | "Live action" | "Anime" | "Webtoon";
 
 export interface Work {
   id: string;
@@ -9,10 +9,34 @@ export interface Work {
   description: string;
   image: string;
   imageAlt: string;
-  rating: string;
+  rating?: string;
   chapters: string;
-  match: number;
+  match?: number;
   tags: string[];
+}
+
+const workFormats = new Set<string>(["Manga", "Manhwa", "Light novel", "Live action", "Anime", "Webtoon"]);
+
+export function isWork(value: unknown): value is Work {
+  if (value === null || typeof value !== "object") return false;
+  const work = value as Record<string, unknown>;
+  return (
+    typeof work.id === "string" &&
+    typeof work.title === "string" &&
+    typeof work.creator === "string" &&
+    typeof work.format === "string" &&
+    workFormats.has(work.format) &&
+    typeof work.genre === "string" &&
+    typeof work.description === "string" &&
+    typeof work.image === "string" &&
+    typeof work.imageAlt === "string" &&
+    typeof work.chapters === "string" &&
+    (work.rating === undefined || typeof work.rating === "string") &&
+    (work.match === undefined ||
+      (typeof work.match === "number" && Number.isFinite(work.match) && work.match >= 0 && work.match <= 100)) &&
+    Array.isArray(work.tags) &&
+    work.tags.every((tag) => typeof tag === "string")
+  );
 }
 
 export const works: Work[] = [
@@ -106,6 +130,36 @@ export const works: Work[] = [
     match: 87,
     tags: ["Slice of life", "Slow burn"],
   },
+  {
+    id: "bloom-into-you-anime",
+    title: "Bloom Into You (Anime)",
+    creator: "TROYCA",
+    format: "Anime",
+    genre: "Coming of age",
+    description: "A thoughtful anime adaptation of the beloved manga.",
+    image:
+      "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?auto=format&fit=crop&w=760&q=85",
+    imageAlt: "Soft pink and white flowers in gentle light",
+    rating: "4.6",
+    chapters: "13 episodes",
+    match: 90,
+    tags: ["Coming of age", "School life"],
+  },
+  {
+    id: "her-name-is-zombie",
+    title: "Her Name is Zombie",
+    creator: "Kim So-yeon",
+    format: "Webtoon",
+    genre: "Supernatural romance",
+    description: "A webtoon about love that defies the ordinary.",
+    image:
+      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=760&q=85",
+    imageAlt: "Neon-lit city street at night",
+    rating: "4.5",
+    chapters: "80 episodes",
+    match: 85,
+    tags: ["Supernatural romance", "Comedy"],
+  },
 ];
 
 export const genres = [
@@ -121,6 +175,8 @@ export const formats: Array<"All formats" | Format> = [
   "All formats",
   "Manga",
   "Manhwa",
+  "Webtoon",
   "Light novel",
   "Live action",
+  "Anime",
 ];

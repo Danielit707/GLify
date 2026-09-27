@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -15,7 +15,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { formats, genres, works, type Work } from "./catalog";
+import { formats, genres, isWork, works, type Work } from "./catalog";
 
 const communities = [
   {
@@ -64,14 +64,16 @@ function WorkCard({
         >
           {saved ? <Check size={17} /> : <Bookmark size={17} />}
         </button>
-        <span className="match-pill">
-          <Sparkles size={12} /> {work.match}% match
-        </span>
+        {work.match !== undefined && (
+          <span className="match-pill">
+            <Sparkles size={12} /> {work.match}% match
+          </span>
+        )}
       </div>
       <div className="work-details">
         <div className="work-title-row">
           <h3>{work.title}</h3>
-          <span className="rating">★ {work.rating}</span>
+          {work.rating !== undefined && <span className="rating">★ {work.rating}</span>}
         </div>
         <p className="work-creator">{work.creator} <span>·</span> {work.chapters}</p>
         <p className="work-description">{work.description}</p>
@@ -84,6 +86,10 @@ function WorkCard({
 }
 
 function App() {
+  const [catalogWorks, setCatalogWorks] = useState(works);
+  const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample">("loading");
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All stories");
   const [format, setFormat] = useState("All formats");
@@ -91,9 +97,52 @@ function App() {
   const [activeNav, setActiveNav] = useState("Discover");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+    const params = new URLSearchParams({ limit: "100" });
+    if (query.trim()) params.set("q", query.trim());
+    if (genre !== "All stories") params.set("genre", genre);
+    if (format !== "All formats") params.set("format", format);
+    setCatalogState("loading");
+
+    const timeout = window.setTimeout(() => {
+      fetch(`${apiBase}/api/works?${params}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Catalog API returned HTTP ${response.status}.`);
+          }
+          const payload: unknown = await response.json();
+          if (
+            payload === null ||
+            typeof payload !== "object" ||
+            !("works" in payload) ||
+            !Array.isArray(payload.works) ||
+            !payload.works.every(isWork)
+          ) {
+            throw new Error("Catalog API returned an unexpected response.");
+          }
+          setCatalogWorks(payload.works);
+          setCatalogError(null);
+          setCatalogState("live");
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          setCatalogWorks(works);
+          setCatalogError(error instanceof Error ? error.message : "Could not load the catalog API.");
+          setCatalogState("sample");
+        });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [catalogRetry, format, genre, query]);
+
   const filteredWorks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return works.filter((work) => {
+    return catalogWorks.filter((work) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [work.title, work.creator, work.format, work.genre, ...work.tags]
@@ -104,7 +153,7 @@ function App() {
       const matchesFormat = format === "All formats" || work.format === format;
       return matchesQuery && matchesGenre && matchesFormat;
     });
-  }, [format, genre, query]);
+  }, [catalogWorks, format, genre, query]);
 
   const visibleWorks = activeNav === "My list"
     ? filteredWorks.filter((work) => savedIds.includes(work.id))
@@ -209,6 +258,21 @@ function App() {
               <p>Sample catalog; ratings, member counts, and match scores are illustrative.</p>
             </div>
             <a className="text-link" href="#communities">Explore the community <ArrowRight size={15} /></a>
+          </div>
+
+          <div className={`catalog-status ${catalogState}`} role="status" aria-live="polite">
+            <span>
+              {catalogState === "live"
+                ? "Connected to the live catalog database."
+                : catalogState === "loading"
+                  ? "Loading catalog results. Previous stories remain visible in the meantime."
+                  : `Showing sample stories. ${catalogError ?? "The live catalog is unavailable."}`}
+            </span>
+            {catalogState !== "live" && (
+              <button type="button" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>
+                Retry connection
+              </button>
+            )}
           </div>
 
           <div className="discovery-tools">
