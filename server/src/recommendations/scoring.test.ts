@@ -110,6 +110,30 @@ test("activity from a closer-matching member contributes more to the score", () 
   assert.ok(closePick.similarMemberScore > weakPick.similarMemberScore);
 });
 
+test("matching a favorite makes a member a stronger neighbor than matching watched-only activity", () => {
+  const scoredWorks: RecommendationWork[] = [
+    { id: "favorite-overlap", title: "Favorite Overlap", format: "Manga", tags: ["Yuri"] },
+    { id: "watched-overlap", title: "Watched Overlap", format: "Manga", tags: ["Yuri"] },
+    { id: "favorite-neighbor-pick", title: "Favorite Neighbor Pick", format: "Manga", tags: ["Yuri"] },
+    { id: "watched-neighbor-pick", title: "Watched Neighbor Pick", format: "Manga", tags: ["Yuri"] },
+  ];
+  const interactions: WorkInteraction[] = [
+    { userId: "current", workId: "favorite-overlap", kind: "favorite" },
+    { userId: "current", workId: "watched-overlap", kind: "watched" },
+    { userId: "favorite-neighbor", workId: "favorite-overlap", kind: "favorite" },
+    { userId: "favorite-neighbor", workId: "favorite-neighbor-pick", kind: "favorite" },
+    { userId: "watched-neighbor", workId: "watched-overlap", kind: "watched" },
+    { userId: "watched-neighbor", workId: "watched-neighbor-pick", kind: "favorite" },
+  ];
+  const { recommendations } = rankPersonalizedWorks("current", scoredWorks, interactions, 10);
+  const favoritePick = recommendations.find((work) => work.id === "favorite-neighbor-pick");
+  const watchedPick = recommendations.find((work) => work.id === "watched-neighbor-pick");
+
+  assert.ok(favoritePick);
+  assert.ok(watchedPick);
+  assert.ok(favoritePick.similarMemberScore > watchedPick.similarMemberScore);
+});
+
 test("uses other members' activity only after they opt in, but always uses the current member's", () => {
   const interactions: WorkInteraction[] = [
     { userId: "current", workId: "shared", kind: "favorite" },
