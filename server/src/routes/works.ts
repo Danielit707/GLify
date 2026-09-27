@@ -25,7 +25,7 @@ const QuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   genre: z.string().trim().min(1).max(80).optional(),
   format: z.enum(Formats).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
 });
 
 function toCatalogWork(row: postgres.Row): CatalogWork {
@@ -82,11 +82,11 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
         id, title, creator, format, genre, description, image,
         image_alt, rating::text AS rating, chapters, match_score AS match, tags
       FROM works
-      WHERE (
-        EXISTS (
-          SELECT 1 FROM unnest(tags[1:6]) AS tag
-          WHERE lower(tag) IN ('yuri', 'shoujo ai')
-        )
+      WHERE curation_status = 'approved'
+      AND EXISTS (
+        SELECT 1
+        FROM unnest(tags[1:6]) AS tag
+        WHERE lower(tag) IN ('yuri', 'shoujo ai')
       )
       AND (
         ${q ?? null}::text IS NULL

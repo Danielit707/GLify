@@ -42,6 +42,16 @@ For Neo4j AuraDB, set `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD` in
 `AURA_INSTANCENAME` (for example, `Instance01`) is just the instance's display
 name; it is not a connection setting and the API does not use it.
 
+For local development, `CORS_ORIGIN` can remain `http://localhost:5173`. In
+Render, set it to the exact deployed frontend origin (no trailing slash) when
+using a custom domain. The current Vercel production origin,
+`https://glify-chi.vercel.app`, is also allowed by the API. If a browser origin
+is not allowed, production shows a connection error instead of substituting
+demo works.
+When using a production Vercel deployment, set
+`VITE_CLERK_PUBLISHABLE_KEY` to the Clerk **production** publishable key and
+add the Vercel domain to Clerk's allowed domains.
+
 ## Quick Start
 
 Requirements: **Node.js 20+** and **npm**.
@@ -79,7 +89,7 @@ the key. To persist account favorites, also set `CLERK_SECRET_KEY` in
    npm run dev:all
    ```
 
-5. Open **http://localhost:5173**. Favorites are available only after signing in and are stored in Postgres per Clerk account. The API health check is at **http://localhost:3001/health** and the catalog endpoint is **http://localhost:3001/api/works**.
+5. Open **http://localhost:5173**. The catalog API returns approved works (up to 200 per request). Favorites are available only after signing in and are stored in Postgres per Clerk account. The API health check is at **http://localhost:3001/health** and the catalog endpoint is **http://localhost:3001/api/works**.
 
 ### Import real titles from AniList
 
@@ -90,7 +100,10 @@ npm run db:import-anilist                         # first page (up to 50 titles)
 npm run db:import-anilist -- --page 2             # next page (up to 50 more)
 ```
 
-The importer only includes titles with "yuri" in their first 6 AniList tags. Re-running a page updates those records instead of creating duplicates.
+The importer only includes titles with "yuri" in their first 6 AniList tags.
+The public catalog also requires an approved title to have "yuri" or "shoujo ai"
+in its first 6 tags. Re-running an import page updates records instead of
+creating duplicates.
 
 After importing titles while the API is already running, run
 `npm run db:seed-graph` to reconcile the entire Neo4j catalog and account

@@ -213,8 +213,8 @@ function App({
   pendingFavoriteId = null,
   onToggleFavorite = () => {},
 }: AppProps) {
-  const [catalogWorks, setCatalogWorks] = useState(works);
-  const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample">("loading");
+  const [catalogWorks, setCatalogWorks] = useState<Work[]>(import.meta.env.PROD ? [] : works);
+  const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample" | "unavailable">("loading");
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [query, setQuery] = useState("");
@@ -226,7 +226,7 @@ function App({
   useEffect(() => {
     const controller = new AbortController();
     const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
-    const params = new URLSearchParams({ limit: "100" });
+    const params = new URLSearchParams({ limit: "200" });
     if (query.trim()) params.set("q", query.trim());
     if (genre !== "All stories") params.set("genre", genre);
     if (format !== "All formats") params.set("format", format);
@@ -254,9 +254,9 @@ function App({
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
-          setCatalogWorks(works);
+          setCatalogWorks(import.meta.env.PROD ? [] : works);
           setCatalogError(error instanceof Error ? error.message : "Could not load the catalog API.");
-          setCatalogState("sample");
+          setCatalogState(import.meta.env.PROD ? "unavailable" : "sample");
         });
     }, 180);
 
@@ -382,10 +382,12 @@ function App({
           <div className={`catalog-status ${catalogState}`} role="status" aria-live="polite">
             <span>
               {catalogState === "live"
-                ? "Connected to the live catalog. AniList titles need Yuri in their first six tags or curator approval."
+                ? "Connected to the live catalog. Only approved titles with Yuri or Shoujo Ai in their first six tags are shown."
                 : catalogState === "loading"
                   ? "Loading catalog results. Previous stories remain visible in the meantime."
-                  : `Showing sample stories. ${catalogError ?? "The live catalog is unavailable."}`}
+                  : catalogState === "sample"
+                    ? `Showing local sample stories. ${catalogError ?? "The live catalog is unavailable."}`
+                    : `The live catalog is unavailable. ${catalogError ?? "Please try again."}`}
             </span>
             {catalogState !== "live" && (
               <button type="button" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>
@@ -460,11 +462,27 @@ function App({
           ) : (
             <div className="empty-state">
               <span><Search size={21} /></span>
-              <h3>{activeNav === "My list" && !query ? "Your list is waiting for a story." : "No stories found just yet."}</h3>
-              <p>Try another search or loosen up your filters.</p>
-              <button type="button" onClick={() => { setQuery(""); setGenre("All stories"); setFormat("All formats"); setActiveNav("Discover"); }}>
-                Show all stories <ArrowRight size={15} />
-              </button>
+              <h3>
+                {catalogState === "unavailable"
+                  ? "The live catalog could not be loaded."
+                  : activeNav === "My list" && !query
+                    ? "Your list is waiting for a story."
+                    : "No stories found just yet."}
+              </h3>
+              <p>
+                {catalogState === "unavailable"
+                  ? "Check the API connection and CORS settings, then retry."
+                  : "Try another search or loosen up your filters."}
+              </p>
+              {catalogState === "unavailable" ? (
+                <button type="button" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>
+                  Retry catalog connection <ArrowRight size={15} />
+                </button>
+              ) : (
+                <button type="button" onClick={() => { setQuery(""); setGenre("All stories"); setFormat("All formats"); setActiveNav("Discover"); }}>
+                  Show all stories <ArrowRight size={15} />
+                </button>
+              )}
             </div>
           )}
           {visibleWorks.length > 0 && (

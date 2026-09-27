@@ -15,6 +15,8 @@ import workRoutes from "./routes/works.js";
 import recommendationRoutes from "./routes/recommendations.js";
 import favoriteRoutes from "./routes/favorites.js";
 
+const productionFrontendOrigin = "https://glify-chi.vercel.app";
+
 export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify({
     logger: {
@@ -24,7 +26,12 @@ export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fas
 
   // CORS — restrict to known origins
   await app.register(cors, {
-    origin: config.CORS_ORIGIN.split(",").map((o) => o.trim()),
+    origin: [
+      ...new Set([
+        ...config.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+        productionFrontendOrigin,
+      ]),
+    ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   });
 
