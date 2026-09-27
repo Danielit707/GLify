@@ -49,6 +49,8 @@ const EnvSchema = z.object({
 
 export type AppConfig = z.infer<typeof EnvSchema>;
 
+const productionFrontendOrigins = ["https://glify-chi.vercel.app"];
+
 let cached: AppConfig | null = null;
 
 export function loadConfig(): AppConfig {
@@ -66,10 +68,12 @@ export function loadConfig(): AppConfig {
   return cached;
 }
 
-/** Comma-separated CORS origins parsed into an array for @fastify/cors. */
-export function getAllowedOrigins(): string[] {
-  const config = loadConfig();
-  return config.CORS_ORIGIN.split(",")
+/** Origins trusted for browser access and Clerk token authorized-party checks. */
+export function getAllowedOrigins(config: AppConfig = loadConfig()): string[] {
+  return [...new Set([
+    ...config.CORS_ORIGIN.split(","),
+    ...productionFrontendOrigins,
+  ])]
     .map((o) => o.trim())
     .filter((o) => o.length > 0);
 }

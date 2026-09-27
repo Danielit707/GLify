@@ -8,14 +8,12 @@
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import type { AppConfig } from "./config.js";
+import { getAllowedOrigins, type AppConfig } from "./config.js";
 import contextPlugin from "./plugins/context.js";
 import healthRoutes from "./routes/health.js";
 import workRoutes from "./routes/works.js";
 import recommendationRoutes from "./routes/recommendations.js";
 import favoriteRoutes from "./routes/favorites.js";
-
-const productionFrontendOrigin = "https://glify-chi.vercel.app";
 
 export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify({
@@ -26,12 +24,7 @@ export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fas
 
   // CORS — restrict to known origins
   await app.register(cors, {
-    origin: [
-      ...new Set([
-        ...config.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
-        productionFrontendOrigin,
-      ]),
-    ],
+    origin: getAllowedOrigins(config),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   });
 

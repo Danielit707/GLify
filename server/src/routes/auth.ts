@@ -1,6 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { AppConfig } from "../config.js";
+import { getAllowedOrigins, type AppConfig } from "../config.js";
 
 export async function authenticateUser(
   fastify: FastifyInstance,
@@ -23,7 +23,7 @@ export async function authenticateUser(
   try {
     const claims = await verifyToken(token, {
       secretKey: config.CLERK_SECRET_KEY,
-      authorizedParties: config.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+      authorizedParties: getAllowedOrigins(config),
     });
     if (typeof claims.sub !== "string" || claims.sub.length === 0) {
       reply.code(401).send({ error: "The sign-in token has no user identity." });
