@@ -19,6 +19,12 @@ const UserRecommendationsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 
+function toJsonNumber(value: unknown): number {
+  if (neo4j.isInt(value)) return value.toNumber();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  throw new Error("Neo4j returned a non-numeric recommendation score.");
+}
+
 export default async function recommendationRoutes(
   fastify: FastifyInstance
 ): Promise<void> {
@@ -67,9 +73,9 @@ export default async function recommendationRoutes(
         id: record.get("id"),
         title: record.get("title"),
         format: record.get("format"),
-        sharedTags: record.get("sharedTags"),
+        sharedTags: toJsonNumber(record.get("sharedTags")),
         sharedTagNames: record.get("sharedTagNames"),
-        matchScore: record.get("matchScore"),
+        matchScore: toJsonNumber(record.get("matchScore")),
       }));
 
       return { workId, recommendations };
@@ -126,7 +132,7 @@ export default async function recommendationRoutes(
         id: record.get("id"),
         title: record.get("title"),
         format: record.get("format"),
-        neighborScore: record.get("neighborScore"),
+        neighborScore: toJsonNumber(record.get("neighborScore")),
       }));
 
       return { userId, recommendations };
@@ -174,10 +180,10 @@ export default async function recommendationRoutes(
       return {
         userId,
         workId,
-        sharedCount: record.get("sharedCount"),
-        workTagCount: record.get("workTagCount"),
+        sharedCount: toJsonNumber(record.get("sharedCount")),
+        workTagCount: toJsonNumber(record.get("workTagCount")),
         sharedTags: record.get("sharedTags"),
-        matchScore: record.get("matchScore"),
+        matchScore: toJsonNumber(record.get("matchScore")),
       };
     } finally {
       await session.close();

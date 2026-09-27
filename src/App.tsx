@@ -154,6 +154,33 @@ interface SimilarWork {
   matchScore: number;
 }
 
+function isSimilarWork(value: unknown): value is SimilarWork {
+  if (typeof value !== "object" || value === null) return false;
+  const work = value as Record<string, unknown>;
+  return (
+    typeof work.id === "string" &&
+    typeof work.title === "string" &&
+    typeof work.format === "string" &&
+    typeof work.sharedTags === "number" &&
+    Number.isFinite(work.sharedTags) &&
+    Array.isArray(work.sharedTagNames) &&
+    work.sharedTagNames.every((tag) => typeof tag === "string") &&
+    typeof work.matchScore === "number" &&
+    Number.isFinite(work.matchScore)
+  );
+}
+
+function isSimilarWorksResponse(
+  value: unknown,
+): value is { recommendations: SimilarWork[] } {
+  if (typeof value !== "object" || value === null) return false;
+  const response = value as Record<string, unknown>;
+  return (
+    Array.isArray(response.recommendations) &&
+    response.recommendations.every(isSimilarWork)
+  );
+}
+
 function SimilarWorks({ workId }: { workId: string }) {
   const [similar, setSimilar] = useState<SimilarWork[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,7 +194,10 @@ function SimilarWorks({ workId }: { workId: string }) {
     })
       .then(async (response) => {
         if (!response.ok) throw new Error("Failed to load similar works");
-        const data = await response.json();
+        const data: unknown = await response.json();
+        if (!isSimilarWorksResponse(data)) {
+          throw new Error("Similar works API returned an unexpected response.");
+        }
         setSimilar(data.recommendations);
         setLoading(false);
       })
