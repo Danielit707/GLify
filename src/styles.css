@@ -159,6 +159,11 @@ button { color: inherit; }
 .watched-button:disabled { cursor: not-allowed; opacity: .66; }
 .more-button { display: flex; align-items: center; gap: 10px; margin: 27px auto 0; padding: 10px 15px; border: 1px solid #eadfda; border-radius: 6px; background: #fff; color: #796b67; font-size: 10px; cursor: pointer; }
 .more-button:hover { border-color: #d7a6b0; color: var(--rose); }
+.catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 24px 0 0; padding: 12px 16px; border: 1px solid #eee8e2; border-radius: 8px; background: #fff; }
+.catalog-pagination button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #eadfda; border-radius: 6px; background: #fff; color: #796b67; font-size: 10px; font-weight: 600; cursor: pointer; }
+.catalog-pagination button:hover:not(:disabled) { border-color: #d7a6b0; color: var(--rose); }
+.catalog-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.catalog-pagination span { color: #948985; font-size: 10px; }
 .similar-works { margin-top: 32px; }
 .similar-works h3 { margin: 0 0 14px; font: 600 18px "Playfair Display", Georgia, serif; }
 .recommendation-intro, .recommendation-components { margin: -7px 0 14px; color: #8d837f; font-size: 10px; line-height: 1.5; }
