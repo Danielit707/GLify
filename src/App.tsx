@@ -15,7 +15,20 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
+
+type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
+
+interface AppProps {
+  accountStatus?: AccountStatus;
+  savedIds?: string[];
+  favoritesLoading?: boolean;
+  favoritesError?: string | null;
+  graphSyncPending?: boolean;
+  pendingFavoriteId?: string | null;
+  onToggleFavorite?: (id: string) => void;
+}
 
 const communities = [
   {
@@ -41,29 +54,76 @@ const communities = [
   },
 ];
 
+function AuthenticationControls() {
+  if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
+    return (
+      <p className="auth-setup-notice" role="status">
+        Add VITE_CLERK_PUBLISHABLE_KEY to .env.local to enable accounts.
+      </p>
+    );
+  }
+
+  return (
+    <ClerkLoaded>
+      <Show when="signed-out">
+        <SignInButton mode="modal">
+          <button className="sign-in-button" type="button">Sign in</button>
+        </SignInButton>
+        <SignUpButton mode="modal">
+          <button className="join-button" type="button">
+            Join GLify <ArrowRight size={15} />
+          </button>
+        </SignUpButton>
+      </Show>
+      <Show when="signed-in">
+        <UserButton />
+      </Show>
+    </ClerkLoaded>
+  );
+}
+
 function WorkCard({
   work,
   saved,
-  onToggleSave,
+  accountStatus,
+  pending,
+  onToggleFavorite,
 }: {
   work: Work;
   saved: boolean;
-  onToggleSave: (id: string) => void;
+  accountStatus: AccountStatus;
+  pending: boolean;
+  onToggleFavorite: (id: string) => void;
 }) {
+  const saveButton = (
+    <button
+      className={`save-button${saved ? " is-saved" : ""}`}
+      type="button"
+      aria-label={
+        accountStatus === "signed-out"
+          ? `Sign in to save ${work.title}`
+          : `${saved ? "Remove" : "Save"} ${work.title} ${saved ? "from" : "to"} your list`
+      }
+      aria-pressed={saved}
+      disabled={
+        (accountStatus !== "signed-in" && accountStatus !== "signed-out") ||
+        pending
+      }
+      title={accountStatus === "disabled" ? "Account favorites are not configured." : undefined}
+      onClick={() => onToggleFavorite(work.id)}
+    >
+      {saved ? <Check size={17} /> : <Bookmark size={17} />}
+    </button>
+  );
+
   return (
     <article className="work-card">
       <div className="cover-wrap">
         <img className="cover" src={work.image} alt={work.imageAlt} loading="lazy" />
         <span className="format-pill">{work.format}</span>
-        <button
-          className={`save-button${saved ? " is-saved" : ""}`}
-          type="button"
-          aria-label={`${saved ? "Remove" : "Save"} ${work.title} ${saved ? "from" : "to"} your list`}
-          aria-pressed={saved}
-          onClick={() => onToggleSave(work.id)}
-        >
-          {saved ? <Check size={17} /> : <Bookmark size={17} />}
-        </button>
+        {accountStatus === "signed-out" ? (
+          <SignInButton mode="modal">{saveButton}</SignInButton>
+        ) : saveButton}
         {work.match !== undefined && (
           <span className="match-pill">
             <Sparkles size={12} /> {work.match}% match
@@ -144,7 +204,15 @@ function SimilarWorks({ workId }: { workId: string }) {
   );
 }
 
-function App() {
+function App({
+  accountStatus = "disabled",
+  savedIds = [],
+  favoritesLoading = false,
+  favoritesError = null,
+  graphSyncPending = false,
+  pendingFavoriteId = null,
+  onToggleFavorite = () => {},
+}: AppProps) {
   const [catalogWorks, setCatalogWorks] = useState(works);
   const [catalogState, setCatalogState] = useState<"loading" | "live" | "sample">("loading");
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -152,7 +220,6 @@ function App() {
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All stories");
   const [format, setFormat] = useState("All formats");
-  const [savedIds, setSavedIds] = useState<string[]>([]);
   const [activeNav, setActiveNav] = useState("Discover");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -214,15 +281,13 @@ function App() {
     });
   }, [catalogWorks, format, genre, query]);
 
-  const visibleWorks = activeNav === "My list"
-    ? filteredWorks.filter((work) => savedIds.includes(work.id))
-    : filteredWorks;
-
-  function toggleSaved(id: string) {
-    setSavedIds((current) =>
-      current.includes(id) ? current.filter((savedId) => savedId !== id) : [...current, id],
-    );
-  }
+  const visibleWorks = activeNav === "My list" && accountStatus === "signed-in"
+    ? favoritesLoading
+      ? []
+      : filteredWorks.filter((work) => savedIds.includes(work.id))
+    : activeNav === "My list"
+      ? []
+      : filteredWorks;
 
   function chooseNav(name: string) {
     setActiveNav(name);
@@ -267,12 +332,7 @@ function App() {
           ))}
         </nav>
         <div className="header-actions">
-          <button className="sign-in-button" type="button" onClick={() => window.alert("Account sign-in is coming soon.")}>
-            Sign in
-          </button>
-          <button className="join-button" type="button" onClick={() => window.alert("GLify accounts are coming soon.")}>
-            Join GLify <ArrowRight size={15} />
-          </button>
+          <AuthenticationControls />
         </div>
       </header>
 
@@ -333,6 +393,23 @@ function App() {
               </button>
             )}
           </div>
+          {favoritesError && (
+            <p className="favorites-error" role="alert">{favoritesError}</p>
+          )}
+          {graphSyncPending && accountStatus === "signed-in" && (
+            <p className="favorites-prompt" role="status">
+              Favorites are saved to your account; Neo4j is pending synchronization.
+            </p>
+          )}
+          {activeNav === "My list" && accountStatus === "signed-out" && (
+            <p className="favorites-prompt">Sign in to see and save your favorite stories.</p>
+          )}
+          {activeNav === "My list" && accountStatus === "disabled" && (
+            <p className="favorites-prompt">Configure account sign-in to use your favorites.</p>
+          )}
+          {activeNav === "My list" && favoritesLoading && (
+            <p className="favorites-prompt" role="status">Loading your saved stories…</p>
+          )}
 
           <div className="discovery-tools">
             <label className="search-box">
@@ -374,7 +451,9 @@ function App() {
                   key={work.id}
                   work={work}
                   saved={savedIds.includes(work.id)}
-                  onToggleSave={toggleSaved}
+                  accountStatus={accountStatus}
+                  pending={favoritesLoading || pendingFavoriteId === work.id}
+                  onToggleFavorite={onToggleFavorite}
                 />
               ))}
             </div>

@@ -168,6 +168,14 @@ async function setupDatabase(): Promise<void> {
         ADD CONSTRAINT works_curation_status_supported
         CHECK (curation_status IN ('pending_review', 'approved', 'rejected'))
       `;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS favorites (
+          user_id text NOT NULL,
+          work_id text NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (user_id, work_id)
+        )
+      `;
 
       for (const work of seedWorks) {
         await transaction`

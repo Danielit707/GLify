@@ -13,6 +13,7 @@ import contextPlugin from "./plugins/context.js";
 import healthRoutes from "./routes/health.js";
 import workRoutes from "./routes/works.js";
 import recommendationRoutes from "./routes/recommendations.js";
+import favoriteRoutes from "./routes/favorites.js";
 
 export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify({
@@ -34,6 +35,7 @@ export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fas
   await app.register(healthRoutes);
   await app.register(workRoutes);
   await app.register(recommendationRoutes);
+  await app.register(favoriteRoutes);
 
   return app;
 }

@@ -6,6 +6,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import neo4j from "neo4j-driver";
 import { z } from "zod";
 
 const SimilarWorksSchema = z.object({
@@ -13,9 +14,9 @@ const SimilarWorksSchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(6),
 });
 
-const MatchSchema = z.object({
+const UserRecommendationsSchema = z.object({
   userId: z.string().min(1),
-  workId: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 
 export default async function recommendationRoutes(
@@ -39,7 +40,7 @@ export default async function recommendationRoutes(
     }
 
     const { workId } = parsed.data;
-    const limit = Math.floor(parsed.data.limit);
+    const limit = neo4j.int(parsed.data.limit);
     const driver = fastify.neo4j;
     if (!driver) throw new Error("Neo4j not initialized");
 
@@ -86,8 +87,15 @@ export default async function recommendationRoutes(
   fastify.get("/api/users/:userId/recommendations", async (request, reply) => {
     const params = request.params as { userId: string };
     const query = request.query as { limit?: string };
-    const { userId } = params;
-    const limit = query.limit ?? "10";
+    const parsed = UserRecommendationsSchema.safeParse({ ...params, ...query });
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid request",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { userId, limit } = parsed.data;
 
     const driver = fastify.neo4j;
     if (!driver) throw new Error("Neo4j not initialized");
@@ -111,7 +119,7 @@ export default async function recommendationRoutes(
                  candidate.format AS format,
                  neighborScore
         `,
-        { userId, limit: Math.floor(parseInt(limit, 10)) }
+        { userId, limit: neo4j.int(limit) }
       );
 
       const recommendations = result.records.map((record) => ({
