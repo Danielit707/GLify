@@ -263,7 +263,7 @@ function App() {
           <div className={`catalog-status ${catalogState}`} role="status" aria-live="polite">
             <span>
               {catalogState === "live"
-                ? "Connected to the live catalog database."
+                ? "Connected to the live catalog. AniList titles need Yuri in their first six tags or curator approval."
                 : catalogState === "loading"
                   ? "Loading catalog results. Previous stories remain visible in the meantime."
                   : `Showing sample stories. ${catalogError ?? "The live catalog is unavailable."}`}

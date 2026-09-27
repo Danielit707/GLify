@@ -8,7 +8,7 @@ The product should feel welcoming, inclusive, safe, and easy to use on desktop a
 
 ## Current status
 
-The repository contains a responsive React and TypeScript discovery UI plus a Fastify API. The API reads catalog records from Neon/Postgres using `GET /api/works`; `npm run db:setup` creates or upgrades the catalog table and inserts eight demonstration titles. `npm run db:import-anilist` imports/upserts Yuri-tagged titles from AniList. The frontend requests the API and visibly reports when it falls back to its bundled sample catalog. AniList's genre tag is not curated confirmation that every result is Girls' Love. Neo4j connections are optional until graph recommendations are added. There is no account system, user-specific persistence, graph-backed recommendation, or real community content connected yet.
+The repository contains a responsive React and TypeScript discovery UI plus a Fastify API. The API reads approved catalog records from Neon/Postgres using `GET /api/works`; `npm run db:setup` creates or upgrades the catalog table and inserts eight demonstration titles. `npm run db:import-anilist` imports/upserts Yuri-tagged AniList media, auto-approving only entries with Yuri among the first six returned tags and leaving other matches pending for review. The `db:curate-anilist` CLI can review, approve, or reject pending imports; pending/rejected titles are hidden from public catalog results. The tag-position rule is a heuristic, not confirmation that every result is Girls' Love. Neo4j connections are optional until graph recommendations are added. There is no account system, user-specific persistence, graph-backed recommendation, or real community content connected yet.
 
 ## Intended architecture
 
@@ -103,7 +103,7 @@ For a more meaningful similarity ranking, normalize shared interactions using a 
 
 ## Delivery milestones
 
-1. **Foundation (current):** responsive discovery prototype, Fastify API, validated Postgres catalog endpoint, repeatable starter-catalog setup, optional AniList import, local search/filter/save interactions, product scope, and setup documentation.
+1. **Foundation (current):** responsive discovery prototype, Fastify API, validated Postgres catalog endpoint, repeatable starter-catalog setup, optional AniList import with human review gating, local search/filter/save interactions, product scope, and setup documentation.
 2. **API and persistence:** provision Neon for shared development/production and add account/user data access; provision Neo4j when graph-backed features begin.
 3. **Accounts and controls:** authentication, session/refresh-token lifecycle, RBAC, profile privacy settings, request validation, and rate limiting.
 4. **Graph discovery:** write and test graph queries for search, filtering, recommendations, and explainable match scores.

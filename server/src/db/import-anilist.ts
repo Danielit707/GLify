@@ -1,7 +1,7 @@
 /**
  * AniList → GLify catalog importer.
  *
- * Queries the AniList GraphQL API for media tagged with yuri/GL genres,
+ * Queries the AniList GraphQL API for media tagged with Yuri,
  * maps the response to the works table schema, and inserts into Postgres.
  *
  * Usage:
@@ -37,7 +37,7 @@ const ANILIST_FORMAT_MAP = new Map<string, WorkFormat>([
 ]);
 
 // ---------------------------------------------------------------------------
-// GraphQL query — fetch media tagged with "Yuri" genre
+// GraphQL query — fetch media tagged with "Yuri"
 // ---------------------------------------------------------------------------
 
 const YURI_MEDIA_QUERY = /* GraphQL */ `
@@ -48,7 +48,7 @@ const YURI_MEDIA_QUERY = /* GraphQL */ `
         currentPage
       }
       media(
-        genre: "Yuri"
+        tag_in: ["Yuri"]
         sort: POPULARITY_DESC
         isAdult: false
       ) {
@@ -69,6 +69,13 @@ const YURI_MEDIA_QUERY = /* GraphQL */ `
         volumes
         episodes
         genres
+        tags {
+          name
+          category
+          isMediaSpoiler
+          isGeneralSpoiler
+          isAdult
+        }
         studios(isMain: true) {
           nodes {
             name
@@ -100,6 +107,13 @@ interface AniListMedia {
   chapters: number | null;
   episodes: number | null;
   genres: string[];
+  tags: Array<{
+    name: string;
+    category: string;
+    isMediaSpoiler: boolean;
+    isGeneralSpoiler: boolean;
+    isAdult: boolean;
+  }>;
   studios: { nodes: Array<{ name: string }> };
   staff: { nodes: Array<{ name: { full: string } }> };
 }
@@ -128,6 +142,13 @@ const AniListResponseSchema = z.object({
         chapters: z.number().int().positive().nullable(),
         episodes: z.number().int().positive().nullable(),
         genres: z.array(z.string()),
+        tags: z.array(z.object({
+          name: z.string(),
+          category: z.string(),
+          isMediaSpoiler: z.boolean(),
+          isGeneralSpoiler: z.boolean(),
+          isAdult: z.boolean(),
+        })),
         studios: z.object({
           nodes: z.array(z.object({ name: z.string() })),
         }),
@@ -172,9 +193,12 @@ function mapAniListToWork(media: AniListMedia) {
     media.description?.replace(/<[^>]*>/g, "").slice(0, 300) ??
     "No description available.";
 
-  const tags = media.genres.filter(
-    (g) => !["Romance", "Drama"].includes(g)
-  );
+  const tags = [...new Set([
+    ...media.genres.filter((genre) => !["Romance", "Drama"].includes(genre)),
+    ...media.tags
+      .filter((tag) => !tag.isMediaSpoiler && !tag.isGeneralSpoiler && !tag.isAdult)
+      .map((tag) => tag.name),
+  ])];
 
   return {
     id: `anilist-${media.id}`,
@@ -190,6 +214,12 @@ function mapAniListToWork(media: AniListMedia) {
     match: null,
     tags,
   };
+}
+
+function isYuriInTopTags(media: AniListMedia): boolean {
+  return media.tags
+    .slice(0, 6)
+    .some((tag) => tag.name.toLowerCase() === "yuri");
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +287,8 @@ async function importFromAniList(page = 1, perPage = 50): Promise<void> {
     const media = await fetchYuriMedia(page, perPage);
     let upserted = 0;
     let skipped = 0;
+    let firstSixMatch = 0;
+    let reviewCandidate = 0;
 
     await db.begin(async (transaction) => {
       for (const item of media) {
@@ -266,16 +298,21 @@ async function importFromAniList(page = 1, perPage = 50): Promise<void> {
           continue;
         }
 
+        const approvedByTagOrder = isYuriInTopTags(item);
+        if (approvedByTagOrder) firstSixMatch++;
+        else reviewCandidate++;
+
         await transaction`
           INSERT INTO works (
             id, title, creator, format, genre, description, image, image_alt,
-            rating, chapters, match_score, tags
+              rating, chapters, match_score, tags, curation_status
           )
           VALUES (
             ${work.id}, ${work.title}, ${work.creator}, ${work.format},
             ${work.genre}, ${work.description}, ${work.image}, ${work.imageAlt},
-            ${work.rating}, ${work.chapters}, ${work.match}, ${work.tags}
-          )
+              ${work.rating}, ${work.chapters}, ${work.match}, ${work.tags},
+              ${approvedByTagOrder ? "approved" : "pending_review"}
+            )
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
             creator = EXCLUDED.creator,
@@ -288,6 +325,11 @@ async function importFromAniList(page = 1, perPage = 50): Promise<void> {
             chapters = EXCLUDED.chapters,
             match_score = EXCLUDED.match_score,
             tags = EXCLUDED.tags,
+            curation_status = CASE
+              WHEN works.curation_status IN ('approved', 'rejected')
+                THEN works.curation_status
+              ELSE EXCLUDED.curation_status
+            END,
             updated_at = now()
         `;
         upserted++;
@@ -295,8 +337,11 @@ async function importFromAniList(page = 1, perPage = 50): Promise<void> {
     });
 
     console.info(
-      `AniList import complete: ${upserted} inserted/updated, ${skipped} skipped (page ${page}).`
+      `AniList import complete: fetched ${media.length}; ${upserted} inserted/updated, ${skipped} skipped; ${firstSixMatch} meet the first-six rule and ${reviewCandidate} need review unless previously curated (page ${page}).`
     );
+    if (media.length > 0 && upserted === 0) {
+      console.warn("No media on this page uses a supported format. Try another page with --page N.");
+    }
   } finally {
     await closePostgres();
   }

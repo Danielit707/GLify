@@ -82,7 +82,8 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
         id, title, creator, format, genre, description, image,
         image_alt, rating::text AS rating, chapters, match_score AS match, tags
       FROM works
-      WHERE (
+      WHERE curation_status = 'approved'
+      AND (
         ${q ?? null}::text IS NULL
         OR title ILIKE '%' || ${q ?? null} || '%'
         OR creator ILIKE '%' || ${q ?? null} || '%'

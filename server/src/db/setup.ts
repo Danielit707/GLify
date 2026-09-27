@@ -135,6 +135,8 @@ async function setupDatabase(): Promise<void> {
           chapters text NOT NULL,
           match_score integer CHECK (match_score >= 0 AND match_score <= 100),
           tags text[] NOT NULL DEFAULT '{}',
+          curation_status text NOT NULL DEFAULT 'pending_review'
+            CHECK (curation_status IN ('pending_review', 'approved', 'rejected')),
           created_at timestamptz NOT NULL DEFAULT now(),
           updated_at timestamptz NOT NULL DEFAULT now(),
           CONSTRAINT works_format_supported
@@ -143,24 +145,40 @@ async function setupDatabase(): Promise<void> {
       `;
       await transaction`ALTER TABLE works ALTER COLUMN rating DROP NOT NULL`;
       await transaction`ALTER TABLE works ALTER COLUMN match_score DROP NOT NULL`;
+      await transaction`
+        ALTER TABLE works
+        ADD COLUMN IF NOT EXISTS curation_status text NOT NULL DEFAULT 'pending_review'
+      `;
+      await transaction`
+        UPDATE works
+        SET curation_status = 'approved'
+        WHERE id NOT LIKE 'anilist-%' AND curation_status = 'pending_review'
+      `;
       await transaction`ALTER TABLE works DROP CONSTRAINT IF EXISTS works_format_check`;
       await transaction`ALTER TABLE works DROP CONSTRAINT IF EXISTS works_format_supported`;
+      await transaction`ALTER TABLE works DROP CONSTRAINT IF EXISTS works_curation_status_check`;
+      await transaction`ALTER TABLE works DROP CONSTRAINT IF EXISTS works_curation_status_supported`;
       await transaction`
         ALTER TABLE works
         ADD CONSTRAINT works_format_supported
         CHECK (format IN ('Manga', 'Manhwa', 'Light novel', 'Live action', 'Anime', 'Webtoon'))
+      `;
+      await transaction`
+        ALTER TABLE works
+        ADD CONSTRAINT works_curation_status_supported
+        CHECK (curation_status IN ('pending_review', 'approved', 'rejected'))
       `;
 
       for (const work of seedWorks) {
         await transaction`
           INSERT INTO works (
             id, title, creator, format, genre, description, image, image_alt,
-            rating, chapters, match_score, tags
+            rating, chapters, match_score, tags, curation_status
           )
           VALUES (
             ${work.id}, ${work.title}, ${work.creator}, ${work.format}, ${work.genre},
             ${work.description}, ${work.image}, ${work.imageAlt}, ${work.rating},
-            ${work.chapters}, ${work.match}, ${work.tags}
+            ${work.chapters}, ${work.match}, ${work.tags}, 'approved'
           )
           ON CONFLICT (id) DO NOTHING
         `;

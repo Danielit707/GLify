@@ -4,9 +4,11 @@
 
 GLify is a community-first discovery platform for Girls' Love (GL) and Yuri media: manga, manhwa, light novels, and live-action series. It will help fans find their next favorite story, connect with like-minded readers, and take part in welcoming, series-specific communities.
 
+![GLify catalog showing searchable titles, format filters, and AniList-imported works](./images/catalog_showcase.png)
+
 ## Project status
 
-The responsive web app now loads its catalog from the Fastify API backed by Neon Postgres. The database setup command creates the `works` table and inserts the eight starter titles. An optional AniList importer adds and updates Yuri-tagged catalog entries. When the API or database is unavailable, the UI explicitly reports that it is showing its local sample catalog. Neo4j is optional until graph recommendations are implemented. Sign-in, community discussions, and saved-list persistence are not connected yet. See [`scope.md`](./scope.md) for the product plan and architecture.
+The responsive web app now loads its curated catalog from the Fastify API backed by Neon Postgres. The database setup command creates the `works` table and inserts the eight starter titles. The AniList importer auto-approves Yuri-tagged titles only when Yuri is among AniList's first six tags; other results remain available for review. The public UI shows approved catalog entries only. When the API or database is unavailable, the UI explicitly reports that it is showing its local sample catalog. Neo4j is optional until graph recommendations are implemented. Sign-in, community discussions, and saved-list persistence are not connected yet. See [`scope.md`](./scope.md) for the product plan and architecture.
 
 ## Technology choices
 
@@ -63,14 +65,28 @@ To run the API alone after setting up Neon, use `npm run dev:server`. The Vite d
 
 ### Import real titles from AniList
 
-After configuring `DATABASE_URL` in `server/.env` and running `npm run db:setup`, import the first page of AniList titles tagged with the Yuri genre:
+After configuring `DATABASE_URL` in `server/.env` and running `npm run db:setup`, import the first page of AniList titles tagged with Yuri:
 
 ```bash
-npm run db:import-anilist
-npm run db:import-anilist -- --page 2
+npm run db:import-anilist                         # first page (up to 50 titles)
+npm run db:import-anilist -- --page 2             # next page (up to 50 more)
 ```
 
-Each page imports up to 50 titles. Re-running a page updates the matching AniList records; other catalog rows are left alone. AniList titles may have no community match score or rating, so those fields remain blank rather than presenting the AniList score as a GLify user match. AniList's Yuri tag may not reliably distinguish confirmed Girls' Love, so review imported records before treating all results as curated GL.
+Run the second command to get the **next 50 titles**. Use `-- --page 3`, `-- --page 4`, and so on for later pages. You do not need to rerun `db:setup` between imports. Each page imports up to 50 titles; rerunning a page updates those AniList records instead of creating duplicates, and leaves other catalog rows alone.
+
+The importer searches AniList's **tags** (not its genres) for Yuri and includes non-spoiler tag names in catalog entries. A title is automatically approved only when the Yuri tag is among the first six tags AniList returns; other Yuri-tagged titles remain in the review queue rather than being discarded. Explicitly approved or rejected decisions are preserved when re-importing. This heuristic reduces weak tag matches but is not definitive; you can still review/approve a title whose Yuri tag appears later. AniList titles may have no rating or community match score, so those fields remain blank rather than presenting the AniList score as a GLify user match. The importer reports how many records it fetched and warns if a page contains no supported media formats.
+
+After importing, run `npm run dev:all` and open **http://localhost:5173** to browse approved catalog results. Check pending matches with `npm run db:curate-anilist -- --list`.
+
+Review imported titles from the repository root:
+
+```powershell
+npm run db:curate-anilist -- --list
+npm run db:curate-anilist -- --approve anilist-10495
+npm run db:curate-anilist -- --reject anilist-18679
+```
+
+Choose IDs that actually appear in your own `--list` output. Check each title against a trusted source before approving it. Rejected entries stay in the database but are hidden from the public catalog. If any requested ID is missing, the command fails without changing any of the requested records.
 
 ### Build the frontend and API
 
