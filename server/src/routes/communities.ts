@@ -258,21 +258,22 @@ export default async function communityRoutes(
     }
 
     try {
-      // Add user as member
-      await fastify.postgres`
-        INSERT INTO community_members (community_id, user_id, role)
-        VALUES (${id}, ${userId}, 'member')
-        ON CONFLICT (community_id, user_id) DO NOTHING
-      `;
-
-      // Increment member count
-      await fastify.postgres`
-        UPDATE communities
+      // Add user as member (only if not already a member)
+      const result = await fastify.postgres`
+        WITH inserted AS (
+          INSERT INTO community_members (community_id, user_id, role)
+          VALUES (${id}, ${userId}, 'member')
+          ON CONFLICT (community_id, user_id) DO NOTHING
+          RETURNING community_id
+        )
+      UPDATE communities
         SET member_count = member_count + 1
-        WHERE id = ${id}
+        WHERE id = ${id} AND EXISTS (SELECT 1 FROM inserted)
+        RETURNING member_count AS "memberCount"
       `;
 
-      return reply.code(200).send({ success: true });
+      const wasInserted = result.length > 0;
+      return reply.code(200).send({ success: true, wasInserted });
     } catch (error) {
       request.log.error({ err: error }, "Failed to join community");
       return reply.code(500).send({

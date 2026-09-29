@@ -392,15 +392,20 @@ function App({
     const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
     const params = new URLSearchParams({ filter: communityFilter });
 
-    fetch(`${apiBase}/api/communities?${params}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Communities API returned HTTP ${response.status}.`);
-        const payload = await response.json();
-        setCommunities(payload.communities);
+    getToken().then((token) => {
+      fetch(`${apiBase}/api/communities?${params}`, {
+        signal: controller.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       })
-      .catch(() => {
-        setCommunities([]);
-      });
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`Communities API returned HTTP ${response.status}.`);
+          const payload = await response.json();
+          setCommunities(payload.communities);
+        })
+        .catch(() => {
+          setCommunities([]);
+        });
+    });
 
     return () => controller.abort();
   }, [activeNav, communityFilter]);
