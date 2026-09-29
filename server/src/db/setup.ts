@@ -204,6 +204,15 @@ async function setupDatabase(): Promise<void> {
           created_at timestamptz NOT NULL DEFAULT now()
         )
       `;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS community_members (
+          community_id text NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+          user_id text NOT NULL,
+          role text NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+          joined_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (community_id, user_id)
+        )
+      `;
 
       for (const work of seedWorks) {
         await transaction`

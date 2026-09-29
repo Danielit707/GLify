@@ -62,6 +62,7 @@ interface Community {
   workIds: string[];
   createdBy: string;
   createdAt: string;
+  isMember: boolean;
 }
 
 function AuthenticationControls() {
@@ -898,7 +899,7 @@ function App({
                 return (
                   <div className="community-grid">
                     {displayedCommunities.map((community) => {
-                      const isMember = user?.id === community.createdBy;
+                      const isMember = community.isMember;
                       const workName = !community.isGeneral && community.workIds.length > 0
                         ? catalogWorks.find((w) => w.id === community.workIds[0])?.title ?? "Work community"
                         : null;

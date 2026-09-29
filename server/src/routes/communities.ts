@@ -60,6 +60,19 @@ export default async function communityRoutes(
 
     const { filter, workId } = parsed.data;
 
+    // Get current user ID from Clerk token
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    let currentUserId: string | null = null;
+    if (clerkToken) {
+      try {
+        const payload = clerkToken.split(".")[1];
+        const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+        currentUserId = decoded.sub || decoded.user_id || null;
+      } catch {
+        // Invalid token, treat as anonymous
+      }
+    }
+
     // Build the query based on filters using parameterized SQL
     const conditions: string[] = [];
     const params: any[] = [];
@@ -79,16 +92,20 @@ export default async function communityRoutes(
 
     const rows = await fastify.postgres.unsafe(
       `SELECT
-        id,
-        name,
-        description,
-        member_count AS "memberCount",
-        is_general AS "isGeneral",
-        image,
-        work_ids AS "workIds",
-        created_by AS "createdBy",
-        created_at AS "createdAt"
-      FROM communities
+        c.id,
+        c.name,
+        c.description,
+        c.member_count AS "memberCount",
+        c.is_general AS "isGeneral",
+        c.image,
+        c.work_ids AS "workIds",
+        c.created_by AS "createdBy",
+        c.created_at AS "createdAt",
+        EXISTS (
+          SELECT 1 FROM community_members cm
+          WHERE cm.community_id = c.id AND cm.user_id = ${currentUserId ?? ""}
+        ) AS "isMember"
+      FROM communities c
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT 100`,
@@ -105,6 +122,7 @@ export default async function communityRoutes(
       workIds: row.workIds ? row.workIds.map(String) : [],
       createdBy: String(row.createdBy),
       createdAt: String(row.createdAt),
+      isMember: Boolean(row.isMember),
     }));
 
     return { communities };
@@ -122,9 +140,15 @@ export default async function communityRoutes(
       return reply.code(401).send({ error: "Authentication required" });
     }
 
-    // For now, extract user ID from token (in production, verify with Clerk SDK)
-    // The token format is: jwt_<user_id>_<signature>
-    const userId = clerkToken.split("_")[1] || "unknown-user";
+    // Decode JWT payload to get user ID (Clerk tokens are JWTs)
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
 
     const parsed = CreateCommunitySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -171,6 +195,12 @@ export default async function communityRoutes(
           work_ids AS "workIds",
           created_by AS "createdBy",
           created_at AS "createdAt"
+      `;
+
+      // Add creator as owner in community_members
+      await fastify.postgres`
+        INSERT INTO community_members (community_id, user_id, role)
+        VALUES (${communityId}, ${userId}, 'owner')
       `;
     } catch (error) {
       request.log.error({ err: error }, "Failed to create community");
