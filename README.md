@@ -9,8 +9,6 @@ GLify is a community-first discovery platform for Girls' Love (GL) and Yuri medi
 
 ![GLify catalog showing searchable titles, format filters, and AniList-imported works](./images/catalog_showcase.png)
 
-![Neo4j graph visualization showing users, works, and their relationships](./images/bloom-visualisation.png)
-
 ## Features
 
 - **Discovery** — Browse GL works across manga, manhwa, webtoons, light novels, live-action series, and anime
@@ -21,6 +19,8 @@ GLify is a community-first discovery platform for Girls' Love (GL) and Yuri medi
 - **Responsive** — Works on desktop and mobile browsers
 
 ## Recommendation behavior and communities
+
+![Neo4j graph visualization showing users, works, and their relationships](./images/bloom-visualisation.png)
 
 Personalized recommendations combine two explainable signals:
 

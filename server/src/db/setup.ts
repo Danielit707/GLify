@@ -191,6 +191,19 @@ async function setupDatabase(): Promise<void> {
           updated_at timestamptz NOT NULL DEFAULT now()
         )
       `;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS communities (
+          id text PRIMARY KEY,
+          name text NOT NULL,
+          description text NOT NULL,
+          is_general boolean NOT NULL DEFAULT true,
+          work_ids text[] NOT NULL DEFAULT '{}',
+          image text,
+          created_by text NOT NULL,
+          member_count integer NOT NULL DEFAULT 1,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
 
       for (const work of seedWorks) {
         await transaction`

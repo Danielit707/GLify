@@ -185,6 +185,27 @@ button { color: inherit; }
 .community-section { padding: 62px 0 67px; background: #f5eeea; scroll-margin-top: 0; }
 .community-image { width: 100%; height: 140px; overflow: hidden; border-radius: 8px; margin-bottom: 12px; background: #f5eeea; }
 .community-image img { width: 100%; height: 100%; object-fit: cover; }
+.create-community-button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border: 1px solid #eadfda; border-radius: 6px; background: #fff; color: #796b67; font-size: 11px; font-weight: 600; cursor: pointer; }
+.create-community-button:hover { border-color: #d7a6b0; color: var(--rose); }
+.community-filters { display: flex; gap: 8px; margin: 16px 0 20px; }
+.filter-button { padding: 7px 12px; border: 1px solid #eadfda; border-radius: 20px; background: #fff; color: #796b67; font-size: 10px; font-weight: 600; cursor: pointer; }
+.filter-button.is-active { border-color: var(--rose); background: #f5e9e7; color: var(--rose); }
+.create-community-form { margin: 16px 0 20px; padding: 20px; border: 1px solid #eee8e2; border-radius: 10px; background: #fff; }
+.create-community-form h3 { margin: 0 0 14px; font: 600 16px "Playfair Display", Georgia, serif; }
+.create-community-form label { display: block; margin-bottom: 12px; }
+.create-community-form label span { display: block; margin-bottom: 4px; color: #796b67; font-size: 10px; font-weight: 600; }
+.create-community-form input[type="text"],
+.create-community-form input[type="url"],
+.create-community-form textarea { width: 100%; padding: 8px 10px; border: 1px solid #e9e2dd; border-radius: 6px; background: #fff; color: var(--ink); font-size: 11px; font-family: inherit; }
+.create-community-form input:focus,
+.create-community-form textarea:focus { outline: 2px solid #d9a1ae; outline-offset: 1px; }
+.create-community-form .checkbox-label { display: flex; align-items: center; gap: 8px; }
+.create-community-form .checkbox-label input { accent-color: var(--rose); }
+.create-community-form .checkbox-label span { margin: 0; }
+.form-actions { display: flex; gap: 10px; margin-top: 16px; }
+.submit-community { padding: 9px 16px; border: 0; border-radius: 6px; background: var(--rose); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.submit-community:disabled { opacity: .5; cursor: not-allowed; }
+.cancel-community { padding: 9px 16px; border: 1px solid #eadfda; border-radius: 6px; background: #fff; color: #796b67; font-size: 11px; font-weight: 600; cursor: pointer; }
 .community-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
 .community-empty > span { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: #f5e9e7; color: var(--rose); margin-bottom: 16px; }
 .community-empty h3 { margin: 0 0 8px; font: 600 20px "Playfair Display", Georgia, serif; }

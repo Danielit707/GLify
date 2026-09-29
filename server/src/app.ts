@@ -15,6 +15,7 @@ import workRoutes from "./routes/works.js";
 import recommendationRoutes from "./routes/recommendations.js";
 import favoriteRoutes from "./routes/favorites.js";
 import activityRoutes from "./routes/activity.js";
+import communityRoutes from "./routes/communities.js";
 
 export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify({
@@ -38,6 +39,7 @@ export async function buildApp(config: AppConfig): Promise<ReturnType<typeof Fas
   await app.register(recommendationRoutes);
   await app.register(favoriteRoutes);
   await app.register(activityRoutes);
+  await app.register(communityRoutes);
 
   return app;
 }

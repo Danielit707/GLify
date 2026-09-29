@@ -52,15 +52,17 @@ export interface PersonalizedRecommendation {
   similarMemberCount: number;
 }
 
-const communities: Array<{
+interface Community {
   id: string;
   name: string;
   description: string;
   memberCount: number;
   isGeneral: boolean;
-  image?: string;
-  workIds?: string[];
-}> = [];
+  image: string | null;
+  workIds: string[];
+  createdBy: string;
+  createdAt: string;
+}
 
 function AuthenticationControls() {
   if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
@@ -305,6 +307,14 @@ function App({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [catalogSection, setCatalogSection] = useState(0);
   const catalogGridRef = useRef<HTMLDivElement>(null);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [communityFilter, setCommunityFilter] = useState<"all" | "general" | "work">("all");
+  const [showCreateCommunity, setShowCreateCommunity] = useState(false);
+  const [newCommunityName, setNewCommunityName] = useState("");
+  const [newCommunityDescription, setNewCommunityDescription] = useState("");
+  const [newCommunityIsGeneral, setNewCommunityIsGeneral] = useState(true);
+  const [newCommunityImage, setNewCommunityImage] = useState("");
+  const [creatingCommunity, setCreatingCommunity] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -367,6 +377,55 @@ function App({
   useEffect(() => {
     setCatalogSection(0);
   }, [activeNav, format, genre, query]);
+
+  useEffect(() => {
+    if (activeNav !== "Communities") return;
+    const controller = new AbortController();
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+    const params = new URLSearchParams({ filter: communityFilter });
+
+    fetch(`${apiBase}/api/communities?${params}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Communities API returned HTTP ${response.status}.`);
+        const payload = await response.json();
+        setCommunities(payload.communities);
+      })
+      .catch(() => {
+        setCommunities([]);
+      });
+
+    return () => controller.abort();
+  }, [activeNav, communityFilter]);
+
+  async function createCommunity() {
+    if (!newCommunityName.trim() || !newCommunityDescription.trim()) return;
+    setCreatingCommunity(true);
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const response = await fetch(`${apiBase}/api/communities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCommunityName.trim(),
+          description: newCommunityDescription.trim(),
+          isGeneral: newCommunityIsGeneral,
+          image: newCommunityImage.trim() || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed to create community: ${response.status}`);
+      const payload = await response.json();
+      setCommunities((prev) => [payload.community, ...prev]);
+      setNewCommunityName("");
+      setNewCommunityDescription("");
+      setNewCommunityIsGeneral(true);
+      setNewCommunityImage("");
+      setShowCreateCommunity(false);
+    } catch (error) {
+      console.error("Failed to create community:", error);
+    } finally {
+      setCreatingCommunity(false);
+    }
+  }
 
   const visibleWorks = activeNav === "My list" && accountStatus === "signed-in"
     ? favoritesLoading
@@ -445,7 +504,7 @@ function App({
             <p className="hero-description">
               Manga, manhwa, novels, and series — find the stories that feel like yours, and the people who love them too.
             </p>
-            <button className="hero-cta" type="button" onClick={() => chooseNav("Discover")}>
+            <button className="hero-cta" type="button" onClick={() => chooseNav("For You")}>
               Find your next favorite <ArrowRight size={17} />
             </button>
             <div className="community-proof">
@@ -479,7 +538,9 @@ function App({
               <h2>{activeNav === "My list" ? "Your saved stories" : "Find your next favorite"}</h2>
               <p>Sample catalog; ratings, member counts, and match scores are illustrative.</p>
             </div>
-            <a className="text-link" href="#communities">Explore the community <ArrowRight size={15} /></a>
+            <button className="text-link" type="button" onClick={() => chooseNav("Communities")}>
+              Explore communities <ArrowRight size={15} />
+            </button>
           </div>
 
           <div className={`catalog-status ${catalogState}`} role="status" aria-live="polite">
@@ -641,9 +702,90 @@ function App({
                 <div>
                   <span className="section-kicker"><MessageCircle size={14} /> FIND YOUR PEOPLE</span>
                   <h2>Good stories are<br />better <span>together.</span></h2>
-                  <p>Communities are coming soon. Create or join spaces for your favorite works or general GL topics.</p>
+                  <p>Create or join spaces for your favorite works or general GL topics.</p>
                 </div>
+                <button
+                  className="create-community-button"
+                  type="button"
+                  onClick={() => setShowCreateCommunity(!showCreateCommunity)}
+                >
+                  <MessageCircle size={14} /> Create community
+                </button>
               </div>
+
+              {showCreateCommunity && (
+                <div className="create-community-form">
+                  <h3>Create a community</h3>
+                  <label>
+                    <span>Name</span>
+                    <input
+                      type="text"
+                      value={newCommunityName}
+                      onChange={(e) => setNewCommunityName(e.target.value)}
+                      placeholder="Community name"
+                      maxLength={100}
+                    />
+                  </label>
+                  <label>
+                    <span>Description</span>
+                    <textarea
+                      value={newCommunityDescription}
+                      onChange={(e) => setNewCommunityDescription(e.target.value)}
+                      placeholder="What is this community about?"
+                      maxLength={500}
+                      rows={3}
+                    />
+                  </label>
+                  <label>
+                    <span>Image URL (optional)</span>
+                    <input
+                      type="url"
+                      value={newCommunityImage}
+                      onChange={(e) => setNewCommunityImage(e.target.value)}
+                      placeholder="https://example.com/image.jpg"
+                    />
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={newCommunityIsGeneral}
+                      onChange={(e) => setNewCommunityIsGeneral(e.target.checked)}
+                    />
+                    <span>General community (not tied to a specific work)</span>
+                  </label>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="submit-community"
+                      onClick={createCommunity}
+                      disabled={creatingCommunity || !newCommunityName.trim() || !newCommunityDescription.trim()}
+                    >
+                      {creatingCommunity ? "Creating..." : "Create community"}
+                    </button>
+                    <button
+                      type="button"
+                      className="cancel-community"
+                      onClick={() => setShowCreateCommunity(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="community-filters">
+                {(["all", "general", "work"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    className={`filter-button${communityFilter === filter ? " is-active" : ""}`}
+                    onClick={() => setCommunityFilter(filter)}
+                  >
+                    {filter === "all" ? "All" : filter === "general" ? "General" : "Work-focused"}
+                  </button>
+                ))}
+              </div>
+
               {communities.length > 0 ? (
                 <div className="community-grid">
                   {communities.map((community) => (
@@ -669,7 +811,7 @@ function App({
                 <div className="community-empty">
                   <span><MessageCircle size={28} /></span>
                   <h3>No communities yet</h3>
-                  <p>Communities are coming soon. You'll be able to create or join spaces for your favorite works or general GL topics.</p>
+                  <p>Be the first to create a community for your favorite works or general GL topics.</p>
                 </div>
               )}
             </div>
