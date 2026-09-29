@@ -129,36 +129,45 @@ export default async function communityRoutes(
 
     const { name, description, isGeneral, workIds, image } = parsed.data;
 
-    const rows = await fastify.postgres`
-      INSERT INTO communities (
-        name,
-        description,
-        is_general,
-        work_ids,
-        image,
-        created_by,
-        member_count
-      )
-      VALUES (
-        ${name},
-        ${description},
-        ${isGeneral},
-        ${workIds ?? []},
-        ${image ?? null},
-        ${userId},
-        1
-      )
-      RETURNING
-        id,
-        name,
-        description,
-        member_count AS "memberCount",
-        is_general AS "isGeneral",
-        image,
-        work_ids AS "workIds",
-        created_by AS "createdBy",
-        created_at AS "createdAt"
-    `;
+    let rows;
+    try {
+      rows = await fastify.postgres`
+        INSERT INTO communities (
+          name,
+          description,
+          is_general,
+          work_ids,
+          image,
+          created_by,
+          member_count
+        )
+        VALUES (
+          ${name},
+          ${description},
+          ${isGeneral},
+          ${workIds ?? []},
+          ${image ?? null},
+          ${userId},
+          1
+        )
+        RETURNING
+          id,
+          name,
+          description,
+          member_count AS "memberCount",
+          is_general AS "isGeneral",
+          image,
+          work_ids AS "workIds",
+          created_by AS "createdBy",
+          created_at AS "createdAt"
+      `;
+    } catch (error) {
+      request.log.error({ err: error }, "Failed to create community");
+      return reply.code(500).send({
+        error: "Failed to create community",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     const row = rows[0];
     const community: Community = {
