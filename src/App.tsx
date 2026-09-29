@@ -469,6 +469,7 @@ function App({
       setNewCommunityWorkId("");
       setNewCommunityImage("");
       setShowCreateCommunity(false);
+      setCommunityFilter("all");
     } catch (error) {
       console.error("Failed to create community:", error);
     } finally {
