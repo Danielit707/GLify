@@ -313,6 +313,7 @@ function App({
   const [newCommunityName, setNewCommunityName] = useState("");
   const [newCommunityDescription, setNewCommunityDescription] = useState("");
   const [newCommunityIsGeneral, setNewCommunityIsGeneral] = useState(true);
+  const [newCommunityWorkId, setNewCommunityWorkId] = useState("");
   const [newCommunityImage, setNewCommunityImage] = useState("");
   const [creatingCommunity, setCreatingCommunity] = useState(false);
 
@@ -397,11 +398,57 @@ function App({
     return () => controller.abort();
   }, [activeNav, communityFilter]);
 
+  function getWorkGroupId(work: Work): string {
+    // Group works by their base title (removing format-specific suffixes)
+    // e.g., "Bloom Into You (Anime)" and "Bloom Into You (Manga)" both map to "bloom into you"
+    const normalized = work.title
+      .toLowerCase()
+      .replace(/\s*\([^)]*\)\s*/g, "") // Remove parenthetical suffixes like "(Anime)"
+      .replace(/\s*:\s*.*$/, "") // Remove subtitles after colon
+      .trim();
+    return normalized;
+  }
+
+  function getGroupedWorks(): Array<{ groupId: string; displayName: string; workIds: string[] }> {
+    const groups = new Map<string, { displayName: string; workIds: string[] }>();
+
+    for (const work of catalogWorks) {
+      const groupId = getWorkGroupId(work);
+      const existing = groups.get(groupId);
+      if (existing) {
+        existing.workIds.push(work.id);
+      } else {
+        groups.set(groupId, { displayName: work.title, workIds: [work.id] });
+      }
+    }
+
+    return Array.from(groups.entries()).map(([groupId, { displayName, workIds }]) => ({
+      groupId,
+      displayName,
+      workIds,
+    }));
+  }
+
   async function createCommunity() {
     if (!newCommunityName.trim() || !newCommunityDescription.trim()) return;
+    if (!newCommunityIsGeneral && !newCommunityWorkId) return;
+
     setCreatingCommunity(true);
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+
+      // If work-focused, find all works in the same group
+      let workIds: string[] | undefined;
+      if (!newCommunityIsGeneral) {
+        const selectedWork = catalogWorks.find((w) => w.id === newCommunityWorkId);
+        if (selectedWork) {
+          const groupId = getWorkGroupId(selectedWork);
+          workIds = catalogWorks
+            .filter((w) => getWorkGroupId(w) === groupId)
+            .map((w) => w.id);
+        }
+      }
+
       const response = await fetch(`${apiBase}/api/communities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -409,6 +456,7 @@ function App({
           name: newCommunityName.trim(),
           description: newCommunityDescription.trim(),
           isGeneral: newCommunityIsGeneral,
+          workIds,
           image: newCommunityImage.trim() || undefined,
         }),
       });
@@ -418,6 +466,7 @@ function App({
       setNewCommunityName("");
       setNewCommunityDescription("");
       setNewCommunityIsGeneral(true);
+      setNewCommunityWorkId("");
       setNewCommunityImage("");
       setShowCreateCommunity(false);
     } catch (error) {
@@ -753,6 +802,25 @@ function App({
                     />
                     <span>General community (not tied to a specific work)</span>
                   </label>
+                  {!newCommunityIsGeneral && (
+                    <label>
+                      <span>Work</span>
+                      <select
+                        value={newCommunityWorkId}
+                        onChange={(e) => setNewCommunityWorkId(e.target.value)}
+                      >
+                        <option value="">Select a work</option>
+                        {getGroupedWorks().map((group) => (
+                          <option key={group.groupId} value={group.workIds[0]}>
+                            {group.displayName}
+                            {group.workIds.length > 1
+                              ? ` (${group.workIds.length} formats)`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <div className="form-actions">
                     <button
                       type="button"
