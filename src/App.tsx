@@ -862,7 +862,7 @@ function App({
               {communities.length > 0 ? (
                 <div className="community-grid">
                   {communities.map((community) => {
-                    const isOwner = user?.id === community.createdBy;
+                    const isMember = user?.id === community.createdBy;
                     const workName = !community.isGeneral && community.workIds.length > 0
                       ? catalogWorks.find((w) => w.id === community.workIds[0])?.title ?? "Work community"
                       : null;
@@ -870,7 +870,7 @@ function App({
                     return (
                       <article className="community-card" key={community.id}>
                         {community.image && (
-                          <div className="community-image">
+                          <div className="community-image clickable" onClick={() => isMember && setSelectedCommunity(community)}>
                             <img src={community.image} alt={community.name} loading="lazy" />
                           </div>
                         )}
@@ -881,18 +881,19 @@ function App({
                         <span className={`community-type ${community.isGeneral ? "is-general" : "is-work"}`}>
                           {community.isGeneral ? "General" : workName ?? "Work-focused"}
                         </span>
-                        <h3>{community.name}</h3>
+                        <h3 className="clickable" onClick={() => isMember && setSelectedCommunity(community)}>
+                          {community.name}
+                        </h3>
                         <p>{community.description}</p>
-                        {isOwner ? (
-                          <span className="owner-badge">Owner</span>
-                        ) : (
-                          <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
-                            Join community <ArrowRight size={15} />
-                          </button>
-                        )}
-                        <button type="button" className="open-chat-button" onClick={() => setSelectedCommunity(community)}>
-                          Open chat <MessageCircle size={14} />
-                        </button>
+                        <div className="community-card-actions">
+                          {isMember ? (
+                            <span className="joined-badge">Joined</span>
+                          ) : (
+                            <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
+                              Join community <ArrowRight size={15} />
+                            </button>
+                          )}
+                        </div>
                       </article>
                     );
                   })}

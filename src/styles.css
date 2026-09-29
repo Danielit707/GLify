@@ -189,8 +189,12 @@ button { color: inherit; }
 .community-type.is-general { background: #e9eee4; color: #5a7252; }
 .community-type.is-work { background: #f7e4df; color: #a54d62; }
 .owner-badge { display: inline-block; padding: 4px 10px; border-radius: 4px; background: var(--rose); color: #fff; font-size: 9px; font-weight: 600; }
-.open-chat-button { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 9px; font-weight: 600; cursor: pointer; }
-.open-chat-button:hover { border-color: #d7a6b0; color: var(--rose); }
+.joined-badge { display: inline-block; padding: 5px 12px; border-radius: 5px; background: #e9eee4; color: #5a7252; font-size: 9px; font-weight: 600; }
+.community-card-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.community-card-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 9px; font-weight: 600; cursor: pointer; }
+.community-card-actions button:hover { border-color: #d7a6b0; color: var(--rose); }
+.clickable { cursor: pointer; }
+.clickable:hover { opacity: .85; }
 .chat-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .5); }
 .chat-panel { width: min(480px, 90vw); height: min(600px, 80vh); display: flex; flex-direction: column; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
 .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #eee8e2; }
