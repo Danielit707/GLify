@@ -10,6 +10,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 
 const CreateCommunitySchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -129,10 +130,13 @@ export default async function communityRoutes(
 
     const { name, description, isGeneral, workIds, image } = parsed.data;
 
+    const communityId = randomUUID();
+
     let rows;
     try {
       rows = await fastify.postgres`
         INSERT INTO communities (
+          id,
           name,
           description,
           is_general,
@@ -142,6 +146,7 @@ export default async function communityRoutes(
           member_count
         )
         VALUES (
+          ${communityId},
           ${name},
           ${description},
           ${isGeneral},
