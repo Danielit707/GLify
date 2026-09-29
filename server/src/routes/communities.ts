@@ -90,6 +90,16 @@ export default async function communityRoutes(
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
+    // Add user ID as a parameter for the EXISTS subquery
+    const allParams = [...params];
+    if (currentUserId) {
+      allParams.push(currentUserId);
+    }
+
+    const memberCheck = currentUserId
+      ? `EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = $${allParams.length})`
+      : `false`;
+
     const rows = await fastify.postgres.unsafe(
       `SELECT
         c.id,
@@ -101,15 +111,12 @@ export default async function communityRoutes(
         c.work_ids AS "workIds",
         c.created_by AS "createdBy",
         c.created_at AS "createdAt",
-        EXISTS (
-          SELECT 1 FROM community_members cm
-          WHERE cm.community_id = c.id AND cm.user_id = ${currentUserId ?? ""}
-        ) AS "isMember"
+        ${memberCheck} AS "isMember"
       FROM communities c
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT 100`,
-      params
+      allParams
     );
 
     const communities: Community[] = rows.map((row) => ({
