@@ -15,7 +15,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
+import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useUser, useAuth } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
@@ -319,7 +319,9 @@ function App({
   const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
   const [chatMessage, setChatMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; author: string; text: string; timestamp: string }>>([]);
+  const [communityView, setCommunityView] = useState<"my" | "all">("my");
   const { user } = useUser();
+  const { getToken } = useAuth();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -453,9 +455,13 @@ function App({
         }
       }
 
+      const token = await getToken();
       const response = await fetch(`${apiBase}/api/communities`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           name: newCommunityName.trim(),
           description: newCommunityDescription.trim(),
@@ -847,6 +853,21 @@ function App({
               )}
 
               <div className="community-filters">
+                <button
+                  type="button"
+                  className={`filter-button${communityView === "my" ? " is-active" : ""}`}
+                  onClick={() => setCommunityView("my")}
+                >
+                  My communities
+                </button>
+                <button
+                  type="button"
+                  className={`filter-button${communityView === "all" ? " is-active" : ""}`}
+                  onClick={() => setCommunityView("all")}
+                >
+                  All communities
+                </button>
+                <span className="filter-divider" />
                 {(["all", "general", "work"] as const).map((filter) => (
                   <button
                     key={filter}
@@ -859,52 +880,62 @@ function App({
                 ))}
               </div>
 
-              {communities.length > 0 ? (
-                <div className="community-grid">
-                  {communities.map((community) => {
-                    const isMember = user?.id === community.createdBy;
-                    const workName = !community.isGeneral && community.workIds.length > 0
-                      ? catalogWorks.find((w) => w.id === community.workIds[0])?.title ?? "Work community"
-                      : null;
+              {(() => {
+                const displayedCommunities = communityView === "my"
+                  ? communities.filter((c) => user?.id === c.createdBy)
+                  : communities;
 
-                    return (
-                      <article className="community-card" key={community.id}>
-                        {community.image && (
-                          <div className="community-image clickable" onClick={() => isMember && setSelectedCommunity(community)}>
-                            <img src={community.image} alt={community.name} loading="lazy" />
-                          </div>
-                        )}
-                        <div className="community-card-top">
-                          <span className="community-symbol"><UsersRound size={14} /></span>
-                          <span className="member-count"><UsersRound size={13} /> {community.memberCount} members</span>
-                        </div>
-                        <span className={`community-type ${community.isGeneral ? "is-general" : "is-work"}`}>
-                          {community.isGeneral ? "General" : workName ?? "Work-focused"}
-                        </span>
-                        <h3 className="clickable" onClick={() => isMember && setSelectedCommunity(community)}>
-                          {community.name}
-                        </h3>
-                        <p>{community.description}</p>
-                        <div className="community-card-actions">
-                          {isMember ? (
-                            <span className="joined-badge">Joined</span>
-                          ) : (
-                            <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
-                              Join community <ArrowRight size={15} />
-                            </button>
+                if (displayedCommunities.length === 0) {
+                  return (
+                    <div className="community-empty">
+                      <span><MessageCircle size={28} /></span>
+                      <h3>{communityView === "my" ? "You haven't joined any communities yet" : "No communities yet"}</h3>
+                      <p>{communityView === "my" ? "Create a community or join an existing one to see it here." : "Be the first to create a community for your favorite works or general GL topics."}</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="community-grid">
+                    {displayedCommunities.map((community) => {
+                      const isMember = user?.id === community.createdBy;
+                      const workName = !community.isGeneral && community.workIds.length > 0
+                        ? catalogWorks.find((w) => w.id === community.workIds[0])?.title ?? "Work community"
+                        : null;
+
+                      return (
+                        <article className="community-card" key={community.id}>
+                          {community.image && (
+                            <div className="community-image clickable" onClick={() => isMember && setSelectedCommunity(community)}>
+                              <img src={community.image} alt={community.name} loading="lazy" />
+                            </div>
                           )}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="community-empty">
-                  <span><MessageCircle size={28} /></span>
-                  <h3>No communities yet</h3>
-                  <p>Be the first to create a community for your favorite works or general GL topics.</p>
-                </div>
-              )}
+                          <div className="community-card-top">
+                            <span className="community-symbol"><UsersRound size={14} /></span>
+                            <span className="member-count"><UsersRound size={13} /> {community.memberCount} members</span>
+                          </div>
+                          <span className={`community-type ${community.isGeneral ? "is-general" : "is-work"}`}>
+                            {community.isGeneral ? "General" : workName ?? "Work-focused"}
+                          </span>
+                          <h3 className="clickable" onClick={() => isMember && setSelectedCommunity(community)}>
+                            {community.name}
+                          </h3>
+                          <p>{community.description}</p>
+                          <div className="community-card-actions">
+                            {isMember ? (
+                              <span className="joined-badge">Joined</span>
+                            ) : (
+                              <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
+                                Join community <ArrowRight size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </section>
         )}
