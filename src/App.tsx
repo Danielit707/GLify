@@ -441,6 +441,22 @@ function App({
     }));
   }
 
+  async function refreshCommunities() {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const params = new URLSearchParams({ filter: communityFilter });
+      const response = await fetch(`${apiBase}/api/communities?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) throw new Error(`Communities API returned HTTP ${response.status}.`);
+      const payload = await response.json();
+      setCommunities(payload.communities);
+    } catch (error) {
+      console.error("Failed to refresh communities:", error);
+    }
+  }
+
   async function joinCommunity(communityId: string) {
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
@@ -453,16 +469,29 @@ function App({
       });
       if (!response.ok) throw new Error(`Failed to join community: ${response.status}`);
 
-      // Update local state: mark as member and increment count
-      setCommunities((prev) =>
-        prev.map((c) =>
-          c.id === communityId
-            ? { ...c, isMember: true, memberCount: c.memberCount + 1 }
-            : c
-        )
-      );
+      // Refresh the list to get accurate member counts and membership status
+      await refreshCommunities();
     } catch (error) {
       console.error("Failed to join community:", error);
+    }
+  }
+
+  async function leaveCommunity(communityId: string) {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/communities/${communityId}/leave`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error(`Failed to leave community: ${response.status}`);
+
+      // Refresh the list to get accurate member counts and membership status
+      await refreshCommunities();
+    } catch (error) {
+      console.error("Failed to leave community:", error);
     }
   }
 
@@ -913,7 +942,7 @@ function App({
 
               {(() => {
                 const displayedCommunities = communityView === "my"
-                  ? communities.filter((c) => user?.id === c.createdBy)
+                  ? communities.filter((c) => c.isMember)
                   : communities;
 
                 if (displayedCommunities.length === 0) {
@@ -954,7 +983,12 @@ function App({
                           <p>{community.description}</p>
                           <div className="community-card-actions">
                             {isMember ? (
-                              <span className="joined-badge">Joined</span>
+                              <>
+                                <span className="joined-badge">Joined</span>
+                                <button type="button" className="leave-button" onClick={() => leaveCommunity(community.id)}>
+                                  Leave
+                                </button>
+                              </>
                             ) : (
                               <button type="button" onClick={() => joinCommunity(community.id)}>
                                 Join community <ArrowRight size={15} />

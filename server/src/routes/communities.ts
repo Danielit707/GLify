@@ -284,6 +284,52 @@ export default async function communityRoutes(
   });
 
   /**
+   * POST /api/communities/:id/leave
+   *
+   * Leave a community. Requires authentication.
+   */
+  fastify.post("/api/communities/:id/leave", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    try {
+      const result = await fastify.postgres`
+        WITH deleted AS (
+          DELETE FROM community_members
+          WHERE community_id = ${id} AND user_id = ${userId} AND role != 'owner'
+          RETURNING community_id
+        )
+        UPDATE communities
+        SET member_count = member_count - 1
+        WHERE id = ${id} AND EXISTS (SELECT 1 FROM deleted)
+        RETURNING member_count AS "memberCount"
+      `;
+
+      const wasDeleted = result.length > 0;
+      return reply.code(200).send({ success: true, wasDeleted });
+    } catch (error) {
+      request.log.error({ err: error }, "Failed to leave community");
+      return reply.code(500).send({
+        error: "Failed to leave community",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  /**
    * GET /api/communities/:id
    *
    * Get a single community by ID.

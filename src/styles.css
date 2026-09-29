@@ -190,6 +190,8 @@ button { color: inherit; }
 .community-type.is-work { background: #f7e4df; color: #a54d62; }
 .owner-badge { display: inline-block; padding: 4px 10px; border-radius: 4px; background: var(--rose); color: #fff; font-size: 9px; font-weight: 600; }
 .joined-badge { display: inline-block; padding: 5px 12px; border-radius: 5px; background: #e9eee4; color: #5a7252; font-size: 9px; font-weight: 600; }
+.leave-button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 9px; font-weight: 600; cursor: pointer; }
+.leave-button:hover { border-color: #d7a6b0; color: var(--rose); }
 .community-card-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .community-card-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 9px; font-weight: 600; cursor: pointer; }
 .community-card-actions button:hover { border-color: #d7a6b0; color: var(--rose); }
