@@ -183,6 +183,12 @@ button { color: inherit; }
 .empty-state button { display: inline-flex; align-items: center; gap: 8px; margin-top: 15px; padding: 9px 12px; border: 0; border-radius: 6px; background: #f5e9e7; color: var(--rose); font-size: 11px; font-weight: 600; cursor: pointer; }
 
 .community-section { padding: 62px 0 67px; background: #f5eeea; scroll-margin-top: 0; }
+.community-image { width: 100%; height: 140px; overflow: hidden; border-radius: 8px; margin-bottom: 12px; background: #f5eeea; }
+.community-image img { width: 100%; height: 100%; object-fit: cover; }
+.community-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
+.community-empty > span { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: #f5e9e7; color: var(--rose); margin-bottom: 16px; }
+.community-empty h3 { margin: 0 0 8px; font: 600 20px "Playfair Display", Georgia, serif; }
+.community-empty p { margin: 0; color: var(--muted); font-size: 12px; max-width: 400px; }
 .community-inner { display: grid; grid-template-columns: .75fr 1.25fr; gap: 57px; align-items: center; }
 .community-heading h2 { margin: 12px 0 10px; font-size: 36px; line-height: 1.14; }
 .community-heading p { max-width: 265px; font-size: 11px; line-height: 1.8; }

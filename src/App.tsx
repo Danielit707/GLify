@@ -52,29 +52,15 @@ export interface PersonalizedRecommendation {
   similarMemberCount: number;
 }
 
-const communities = [
-  {
-    name: "Slow burn enjoyers",
-    members: "2.4k",
-    topic: "For the longing, the glances, and the almost-kisses.",
-    color: "peach",
-    icon: "♡",
-  },
-  {
-    name: "The manhwa corner",
-    members: "1.8k",
-    topic: "Your next favorite panel is waiting here.",
-    color: "sage",
-    icon: "✿",
-  },
-  {
-    name: "After the last chapter",
-    members: "986",
-    topic: "No spoilers? No problem. Come talk endings.",
-    color: "lilac",
-    icon: "☾",
-  },
-];
+const communities: Array<{
+  id: string;
+  name: string;
+  description: string;
+  memberCount: number;
+  isGeneral: boolean;
+  image?: string;
+  workIds?: string[];
+}> = [];
 
 function AuthenticationControls() {
   if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
@@ -409,11 +395,6 @@ function App({
   function chooseNav(name: string) {
     setActiveNav(name);
     setMobileMenuOpen(false);
-    if (name === "Communities") {
-      document.getElementById("communities")?.scrollIntoView({ behavior: "smooth" });
-    } else {
-      document.getElementById("discover")?.scrollIntoView({ behavior: "smooth" });
-    }
   }
 
   return (
@@ -435,8 +416,10 @@ function App({
         <nav className={`main-nav${mobileMenuOpen ? " is-open" : ""}`} aria-label="Main navigation">
           {[
             { name: "Discover", icon: <Compass size={16} /> },
+            { name: "For You", icon: <Sparkles size={16} /> },
             { name: "Communities", icon: <UsersRound size={16} /> },
             { name: "My list", icon: <Bookmark size={16} /> },
+            { name: "Users", icon: <UsersRound size={16} /> },
           ].map((item) => (
             <button
               className={`nav-link${activeNav === item.name ? " is-active" : ""}`}
@@ -454,6 +437,7 @@ function App({
       </header>
 
       <main>
+        {activeNav === "Discover" && (
         <section className="hero-section">
           <div className="hero-copy">
             <span className="eyebrow"><Sparkles size={14} /> A little corner of the internet, just for us</span>
@@ -485,7 +469,9 @@ function App({
           </div>
           <div className="hero-bottom-note"><span /> GOOD STORIES. GOOD COMPANY. ALWAYS.</div>
         </section>
+        )}
 
+        {(activeNav === "Discover" || activeNav === "My list") && (
         <section className="discovery-section content-width" id="discover">
           <div className="section-heading">
             <div>
@@ -628,7 +614,11 @@ function App({
               </button>
             </nav>
           )}
-          {activeNav === "Discover" && (
+        </section>
+        )}
+
+        {activeNav === "For You" && (
+          <section className="content-width" id="recommendations" style={{ padding: "40px 0 76px" }}>
             <PersonalizedRecommendations
               accountStatus={accountStatus}
               recommendations={recommendations.filter(
@@ -641,37 +631,67 @@ function App({
               participationPending={participationPending}
               onSetRecommendationParticipation={onSetRecommendationParticipation}
             />
-          )}
+          </section>
+        )}
 
-        </section>
-
-        <section className="community-section" id="communities">
-          <div className="content-width community-inner">
-            <div className="community-heading">
-              <div>
-                <span className="section-kicker"><MessageCircle size={14} /> FIND YOUR PEOPLE</span>
-                <h2>Good stories are<br />better <span>together.</span></h2>
-                <p>A preview of the community spaces taking shape around favorite tropes and series.</p>
+        {activeNav === "Communities" && (
+          <section className="community-section" id="communities">
+            <div className="content-width community-inner">
+              <div className="community-heading">
+                <div>
+                  <span className="section-kicker"><MessageCircle size={14} /> FIND YOUR PEOPLE</span>
+                  <h2>Good stories are<br />better <span>together.</span></h2>
+                  <p>Communities are coming soon. Create or join spaces for your favorite works or general GL topics.</p>
+                </div>
               </div>
-              <a className="text-link" href="#discover">See all communities <ArrowRight size={15} /></a>
+              {communities.length > 0 ? (
+                <div className="community-grid">
+                  {communities.map((community) => (
+                    <article className="community-card" key={community.id}>
+                      {community.image && (
+                        <div className="community-image">
+                          <img src={community.image} alt={community.name} loading="lazy" />
+                        </div>
+                      )}
+                      <div className="community-card-top">
+                        <span className="community-symbol"><UsersRound size={14} /></span>
+                        <span className="member-count"><UsersRound size={13} /> {community.memberCount} members</span>
+                      </div>
+                      <h3>{community.name}</h3>
+                      <p>{community.description}</p>
+                      <button type="button" onClick={() => window.alert("Community discussions are coming soon.")}>
+                        Join community <ArrowRight size={15} />
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="community-empty">
+                  <span><MessageCircle size={28} /></span>
+                  <h3>No communities yet</h3>
+                  <p>Communities are coming soon. You'll be able to create or join spaces for your favorite works or general GL topics.</p>
+                </div>
+              )}
             </div>
-            <div className="community-grid">
-              {communities.map((community) => (
-                <article className={`community-card ${community.color}`} key={community.name}>
-                  <div className="community-card-top">
-                    <span className="community-symbol">{community.icon}</span>
-                    <span className="member-count"><UsersRound size={13} /> {community.members}</span>
-                  </div>
-                  <h3>{community.name}</h3>
-                  <p>{community.topic}</p>
-                  <button type="button" onClick={() => window.alert("Community discussions are coming soon.")}>
-                    Find your people <ArrowRight size={15} />
-                  </button>
-                </article>
-              ))}
+          </section>
+        )}
+
+        {activeNav === "Users" && (
+          <section className="content-width" id="users" style={{ padding: "40px 0 76px" }}>
+            <div className="section-heading">
+              <div>
+                <span className="section-kicker"><UsersRound size={14} /> MEMBERS</span>
+                <h2>Find your people</h2>
+                <p>Member profiles and discovery are coming soon.</p>
+              </div>
             </div>
-          </div>
-        </section>
+            <div className="community-empty">
+              <span><UsersRound size={28} /></span>
+              <h3>Users section coming soon</h3>
+              <p>You'll be able to browse member profiles, see their favorites and watched lists, and connect with other GL fans.</p>
+            </div>
+          </section>
+        )}
       </main>
       <footer className="site-footer">
         <a className="brand footer-brand" href="#discover" onClick={() => chooseNav("Discover")}>

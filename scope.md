@@ -63,7 +63,10 @@ The catalog and account activity are stored in Neon/Postgres. Neo4j is a derived
 
 ### Community
 
-- Provide one persistent community space for every catalog work, reachable from that work's details.
+- Provide one persistent community space for every catalog work, reachable from that work's details. Works that exist in multiple formats (e.g., an anime that also has a manga and light novel) share a single community — creating a community for "Bloom Into You" groups its anime, manga, and light novel together.
+- Support general communities not tied to a specific work, for broader GL topics, genres, or interests.
+- In the communities section, allow filtering by general vs. work-focused communities, and search for a specific work's community.
+- When viewing a work, show its associated community.
 - Support real-time or near-real-time chat as well as durable threaded discussions, spoiler labels, and member reactions.
 - Let members attach and share permitted media in a work community. Store files in object storage and metadata/permissions in Postgres, not as large database blobs or graph properties.
 - Add membership/access controls, reporting, blocking, moderation queues, admin actions, and community guidelines before enabling public posting or uploads.

@@ -9,13 +9,15 @@ GLify is a community-first discovery platform for Girls' Love (GL) and Yuri medi
 
 ![GLify catalog showing searchable titles, format filters, and AniList-imported works](./images/catalog_showcase.png)
 
+![Neo4j graph visualization showing users, works, and their relationships](./images/bloom-visualisation.png)
+
 ## Features
 
 - **Discovery** — Browse GL works across manga, manhwa, webtoons, light novels, live-action series, and anime
 - **Search & Filter** — Search by title, creator, genre, or tags; filter by format and genre
 - **Personalized recommendations** — Rank unseen and non-favorited works with 35% tag fit and 65% activity from similar members; favorites count twice as much as watched/read activity
 - **Personal library** — Save favorites and mark works watched/read while signed in; activity is stored per account
-- **Work communities** — A dedicated community for every work, with chat, discussions, and media sharing (planned)
+- **Communities** — Create or join spaces for specific works or general GL topics (coming soon)
 - **Responsive** — Works on desktop and mobile browsers
 
 ## Recommendation behavior and communities
@@ -33,10 +35,16 @@ the interface clearly falls back to tag-fit-only ranking. Users can separately
 opt in to let their favorites and watched/read list inform recommendations for
 other members; opting out does not disable their own recommendations.
 
-Every work is intended to have its own community for chat, threaded discussion,
-and sharing media. These work communities are not implemented yet. Before
-opening them publicly, GLify needs community membership and moderation,
-reporting and spoiler controls, plus secure media storage and upload rules.
+Communities are spaces for members to discuss and connect. There are two types:
+
+- **Work communities** — Each work has a community that groups all its formats. For example, a community for "Bloom Into You" includes its anime, manga, and light novel in one space. When you click on a work, you can see its community.
+- **General communities** — Not tied to a specific work. These are for broader GL topics, genres, or interests.
+
+In the communities section, you can filter to show only general communities, only work-focused communities, or search for a specific work's community. Members can create new communities.
+
+Communities are not yet implemented. Before opening them publicly, GLify needs
+community membership and moderation, reporting and spoiler controls, plus
+secure media storage and upload rules.
 
 ## Technology Stack
 
