@@ -15,7 +15,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
@@ -316,6 +316,10 @@ function App({
   const [newCommunityWorkId, setNewCommunityWorkId] = useState("");
   const [newCommunityImage, setNewCommunityImage] = useState("");
   const [creatingCommunity, setCreatingCommunity] = useState(false);
+  const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; author: string; text: string; timestamp: string }>>([]);
+  const { user } = useUser();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -857,24 +861,41 @@ function App({
 
               {communities.length > 0 ? (
                 <div className="community-grid">
-                  {communities.map((community) => (
-                    <article className="community-card" key={community.id}>
-                      {community.image && (
-                        <div className="community-image">
-                          <img src={community.image} alt={community.name} loading="lazy" />
+                  {communities.map((community) => {
+                    const isOwner = user?.id === community.createdBy;
+                    const workName = !community.isGeneral && community.workIds.length > 0
+                      ? catalogWorks.find((w) => w.id === community.workIds[0])?.title ?? "Work community"
+                      : null;
+
+                    return (
+                      <article className="community-card" key={community.id}>
+                        {community.image && (
+                          <div className="community-image">
+                            <img src={community.image} alt={community.name} loading="lazy" />
+                          </div>
+                        )}
+                        <div className="community-card-top">
+                          <span className="community-symbol"><UsersRound size={14} /></span>
+                          <span className="member-count"><UsersRound size={13} /> {community.memberCount} members</span>
                         </div>
-                      )}
-                      <div className="community-card-top">
-                        <span className="community-symbol"><UsersRound size={14} /></span>
-                        <span className="member-count"><UsersRound size={13} /> {community.memberCount} members</span>
-                      </div>
-                      <h3>{community.name}</h3>
-                      <p>{community.description}</p>
-                      <button type="button" onClick={() => window.alert("Community discussions are coming soon.")}>
-                        Join community <ArrowRight size={15} />
-                      </button>
-                    </article>
-                  ))}
+                        <span className={`community-type ${community.isGeneral ? "is-general" : "is-work"}`}>
+                          {community.isGeneral ? "General" : workName ?? "Work-focused"}
+                        </span>
+                        <h3>{community.name}</h3>
+                        <p>{community.description}</p>
+                        {isOwner ? (
+                          <span className="owner-badge">Owner</span>
+                        ) : (
+                          <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
+                            Join community <ArrowRight size={15} />
+                          </button>
+                        )}
+                        <button type="button" className="open-chat-button" onClick={() => setSelectedCommunity(community)}>
+                          Open chat <MessageCircle size={14} />
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="community-empty">
@@ -885,6 +906,73 @@ function App({
               )}
             </div>
           </section>
+        )}
+
+        {selectedCommunity && (
+          <div className="chat-overlay" onClick={() => setSelectedCommunity(null)}>
+            <div className="chat-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="chat-header">
+                <h3>{selectedCommunity.name}</h3>
+                <button type="button" className="close-chat" onClick={() => setSelectedCommunity(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="chat-messages">
+                {chatMessages.length === 0 ? (
+                  <p className="chat-empty">No messages yet. Say hello!</p>
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div className="chat-message" key={msg.id}>
+                      <span className="chat-author">{msg.author}</span>
+                      <p>{msg.text}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="chat-input">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && chatMessage.trim()) {
+                      setChatMessages((prev) => [
+                        ...prev,
+                        {
+                          id: crypto.randomUUID(),
+                          author: user?.username ?? "You",
+                          text: chatMessage.trim(),
+                          timestamp: new Date().toISOString(),
+                        },
+                      ]);
+                      setChatMessage("");
+                    }
+                  }}
+                  placeholder="Type a message..."
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (chatMessage.trim()) {
+                      setChatMessages((prev) => [
+                        ...prev,
+                        {
+                          id: crypto.randomUUID(),
+                          author: user?.username ?? "You",
+                          text: chatMessage.trim(),
+                          timestamp: new Date().toISOString(),
+                        },
+                      ]);
+                      setChatMessage("");
+                    }
+                  }}
+                  disabled={!chatMessage.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeNav === "Users" && (
