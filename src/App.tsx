@@ -436,6 +436,31 @@ function App({
     }));
   }
 
+  async function joinCommunity(communityId: string) {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/communities/${communityId}/join`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error(`Failed to join community: ${response.status}`);
+
+      // Update local state: mark as member and increment count
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === communityId
+            ? { ...c, isMember: true, memberCount: c.memberCount + 1 }
+            : c
+        )
+      );
+    } catch (error) {
+      console.error("Failed to join community:", error);
+    }
+  }
+
   async function createCommunity() {
     if (!newCommunityName.trim() || !newCommunityDescription.trim()) return;
     if (!newCommunityIsGeneral && !newCommunityWorkId) return;
@@ -926,7 +951,7 @@ function App({
                             {isMember ? (
                               <span className="joined-badge">Joined</span>
                             ) : (
-                              <button type="button" onClick={() => window.alert("Joining communities is coming soon.")}>
+                              <button type="button" onClick={() => joinCommunity(community.id)}>
                                 Join community <ArrowRight size={15} />
                               </button>
                             )}

@@ -234,6 +234,55 @@ export default async function communityRoutes(
   });
 
   /**
+   * POST /api/communities/:id/join
+   *
+   * Join a community. Requires authentication.
+   */
+  fastify.post("/api/communities/:id/join", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    // Verify Clerk session token
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    // Decode JWT payload to get user ID
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    try {
+      // Add user as member
+      await fastify.postgres`
+        INSERT INTO community_members (community_id, user_id, role)
+        VALUES (${id}, ${userId}, 'member')
+        ON CONFLICT (community_id, user_id) DO NOTHING
+      `;
+
+      // Increment member count
+      await fastify.postgres`
+        UPDATE communities
+        SET member_count = member_count + 1
+        WHERE id = ${id}
+      `;
+
+      return reply.code(200).send({ success: true });
+    } catch (error) {
+      request.log.error({ err: error }, "Failed to join community");
+      return reply.code(500).send({
+        error: "Failed to join community",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  /**
    * GET /api/communities/:id
    *
    * Get a single community by ID.
