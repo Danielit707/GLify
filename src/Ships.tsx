@@ -149,6 +149,7 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
           <label>
             <span>Image URL</span>
             <input type="url" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://example.com/image.jpg" />
+            <small className="image-guidance">Portrait images close to 736 × 883 px work best. Other sizes are cropped to fit.</small>
           </label>
           <label>
             <span>Characters (comma separated)</span>
@@ -170,29 +171,32 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
           <p>Be the first to create a ship pairing for your favorite characters!</p>
         </div>
       ) : (
-        <div className="community-grid">
+        <div className="ships-grid">
           {ships.map((ship) => (
-            <article className="community-card" key={ship.id}>
-              <div className="community-image">
+            <article className="ship-card" key={ship.id}>
+              <div className="ship-card-image">
                 <img src={ship.image} alt={ship.name} loading="lazy" />
               </div>
-              <h3>{ship.name}</h3>
-              <p>{ship.characters}</p>
-              <div className="community-card-actions">
-                <button
-                  type="button"
-                  className={`watched-button ${ship.isLiked ? "is-watched" : ""}`}
-                  onClick={() => toggleLike(ship.id)}
-                >
-                  <Heart size={14} fill={ship.isLiked ? "currentColor" : "none"} /> {ship.likeCount}
-                </button>
-                <button
-                  type="button"
-                  className={`save-button ${ship.isFavorited ? "is-saved" : ""}`}
-                  onClick={() => toggleFavorite(ship.id)}
-                >
-                  <Star size={14} fill={ship.isFavorited ? "currentColor" : "none"} />
-                </button>
+              <div className="ship-card-info">
+                <h3>{ship.name}</h3>
+                <p>{ship.characters}</p>
+                <div className="ship-card-actions">
+                  <button
+                    type="button"
+                    className={`watched-button ${ship.isLiked ? "is-watched" : ""}`}
+                    onClick={() => toggleLike(ship.id)}
+                  >
+                    <Heart size={14} fill={ship.isLiked ? "currentColor" : "none"} /> {ship.likeCount}
+                  </button>
+                  <button
+                    type="button"
+                    className={`save-button ${ship.isFavorited ? "is-saved" : ""}`}
+                    onClick={() => toggleFavorite(ship.id)}
+                    aria-label={ship.isFavorited ? "Remove from favorite ships" : "Add to favorite ships"}
+                  >
+                    <Star size={14} fill={ship.isFavorited ? "currentColor" : "none"} />
+                  </button>
+                </div>
               </div>
             </article>
           ))}

@@ -335,6 +335,17 @@ button { color: inherit; }
 .community-card p { max-width: 72%; margin: 0; color: #89807d; font-size: 9px; line-height: 1.5; }
 .community-card button { position: absolute; right: 15px; bottom: 17px; display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--rose); font-size: 9px; font-weight: 600; cursor: pointer; }
 .community-card button:hover { color: var(--rose-dark); }
+.image-guidance { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.ships-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 20px; }
+.ship-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid #ece2db; border-radius: 10px; background: #fffdfa; box-shadow: 0 4px 14px rgba(93, 59, 55, .06); }
+.ship-card-image { aspect-ratio: 736 / 883; overflow: hidden; background: #f5eeea; }
+.ship-card-image img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.ship-card-info { display: flex; flex: 1; flex-direction: column; gap: 7px; padding: 14px; }
+.ship-card-info h3 { margin: 0; font: 600 17px "Playfair Display", Georgia, serif; line-height: 1.2; }
+.ship-card-info p { min-height: 2.8em; margin: 0; color: #796b67; font-size: 11px; line-height: 1.4; }
+.ship-card-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
+.ship-card-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 31px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 10px; font-weight: 600; cursor: pointer; }
+.ship-card-actions button:hover { border-color: #d7a6b0; color: var(--rose); }
 .site-footer { min-height: 82px; display: flex; align-items: center; gap: 13px; }
 .footer-brand { gap: 7px; font-size: 19px; }
 .footer-brand .brand-mark { width: 25px; height: 25px; border-radius: 8px; }
@@ -434,6 +445,9 @@ button { color: inherit; }
   .community-card h3 { font-size: 13px; }
   .community-card p { max-width: 67%; font-size: 8px; }
   .community-card button { right: 11px; bottom: 15px; font-size: 8px; }
+  .ships-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .ship-card-info { padding: 11px; }
+  .ship-card-info h3 { font-size: 15px; }
   .site-footer { min-height: 87px; flex-wrap: wrap; gap: 5px 10px; padding: 14px 0; }
   .footer-brand { font-size: 18px; }
   .site-footer > p { flex: 1; font-size: 9px; }
