@@ -127,3 +127,49 @@ export const seedWorks: SeedWork[] = [
     tags: ["Supernatural romance", "Comedy"],
   },
 ];
+
+export interface SeedShip {
+  id: string;
+  name: string;
+  characters: string;
+  image: string;
+  createdBy: string;
+}
+
+export const seedShips: SeedShip[] = [
+  {
+    id: "touko-yuu",
+    name: "Touko x Yuu",
+    characters: "Touko Nanami & Yuu Koito",
+    image: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=760&q=85",
+    createdBy: "system",
+  },
+  {
+    id: "himari-yori",
+    name: "Himari x Yori",
+    characters: "Himari Kino & Yori Asanagi",
+    image: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=760&q=85",
+    createdBy: "system",
+  },
+  {
+    id: "sam-mon",
+    name: "Sam x Mon",
+    characters: "Sam & Mon",
+    image: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=760&q=85",
+    createdBy: "system",
+  },
+  {
+    id: "sungji-sumin",
+    name: "Sungji x Sumin",
+    characters: "Sungji & Sumin",
+    image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=760&q=85",
+    createdBy: "system",
+  },
+  {
+    id: "saki-kanon",
+    name: "Saki x Kanon",
+    characters: "Saki & Kanon",
+    image: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=760&q=85",
+    createdBy: "system",
+  },
+];

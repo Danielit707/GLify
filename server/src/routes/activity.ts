@@ -20,7 +20,7 @@ export default async function activityRoutes(fastify: FastifyInstance): Promise<
       VALUES (${userId})
       ON CONFLICT (user_id) DO NOTHING
     `;
-    const [favoriteRows, watchedRows, preferenceRows] = await Promise.all([
+    const [favoriteRows, watchedRows, preferenceRows, commentedRows] = await Promise.all([
       fastify.postgres`
         SELECT work_id FROM favorites
         WHERE user_id = ${userId}
@@ -35,11 +35,16 @@ export default async function activityRoutes(fastify: FastifyInstance): Promise<
         SELECT share_activity FROM recommendation_preferences
         WHERE user_id = ${userId}
       `,
+      fastify.postgres`
+        SELECT DISTINCT work_id FROM work_comments
+        WHERE user_id = ${userId}
+      `,
     ]);
     const graphSynced = await syncUserGraph(fastify, userId);
     return {
       favorites: favoriteRows.map((row) => String(row.work_id)),
       watched: watchedRows.map((row) => String(row.work_id)),
+      commented: commentedRows.map((row) => String(row.work_id)),
       shareActivity: Boolean(preferenceRows[0]?.share_activity),
       graphSynced,
     };

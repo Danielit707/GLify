@@ -22,7 +22,7 @@ declare module "fastify" {
   }
 }
 
-import { seedWorks } from "../db/seed-data.js";
+import { seedWorks, seedShips } from "../db/seed-data.js";
 
 export default fp(async function contextPlugin(
   fastify: FastifyInstance
@@ -139,6 +139,33 @@ export default fp(async function contextPlugin(
     END $$;
   `;
 
+  await postgresClient`
+    CREATE TABLE IF NOT EXISTS ships (
+      id text PRIMARY KEY,
+      name text NOT NULL,
+      characters text NOT NULL,
+      image text NOT NULL,
+      created_by text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+  await postgresClient`
+    CREATE TABLE IF NOT EXISTS ship_likes (
+      ship_id text NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      user_id text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (ship_id, user_id)
+    )
+  `;
+  await postgresClient`
+    CREATE TABLE IF NOT EXISTS ship_favorites (
+      ship_id text NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      user_id text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (ship_id, user_id)
+    )
+  `;
+
   // Seed initial catalog works if table is empty
   const countRow = await postgresClient`SELECT COUNT(*) AS count FROM works`;
   if (Number(countRow[0]?.count || 0) === 0) {
@@ -153,6 +180,18 @@ export default fp(async function contextPlugin(
           ${work.description}, ${work.image}, ${work.imageAlt}, ${work.rating},
           ${work.chapters}, ${work.match}, ${work.tags}, 'approved'
         )
+        ON CONFLICT (id) DO NOTHING
+      `;
+    }
+  }
+
+  // Seed initial ships if table is empty
+  const shipCountRow = await postgresClient`SELECT COUNT(*) AS count FROM ships`;
+  if (Number(shipCountRow[0]?.count || 0) === 0) {
+    for (const ship of seedShips) {
+      await postgresClient`
+        INSERT INTO ships (id, name, characters, image, created_by)
+        VALUES (${ship.id}, ${ship.name}, ${ship.characters}, ${ship.image}, ${ship.createdBy})
         ON CONFLICT (id) DO NOTHING
       `;
     }

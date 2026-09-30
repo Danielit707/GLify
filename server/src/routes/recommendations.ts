@@ -143,12 +143,24 @@ export default async function recommendationRoutes(
           communityId: String(row.community_id),
         }));
 
+      const shipRows = await fastify.postgres`
+        SELECT user_id, ship_id
+        FROM ship_favorites
+      `;
+      const shipInteractions = shipRows
+        .filter((row) => row.user_id === userId || optedInUserIds.has(String(row.user_id)))
+        .map((row) => ({
+          userId: String(row.user_id),
+          shipId: String(row.ship_id),
+        }));
+
       const ranked = rankPersonalizedWorks(
         userId,
         [...workById.values()],
         eligibleInteractions,
         parsed.data.limit,
         communityInteractions,
+        shipInteractions,
       );
       return ranked;
     } finally {

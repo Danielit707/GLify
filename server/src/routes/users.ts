@@ -168,6 +168,35 @@ export default async function userRoutes(
         `
       : [];
 
+    const opinions = await fastify.postgres`
+      SELECT
+        c.id,
+        c.work_id AS "workId",
+        c.text,
+        c.created_at AS "createdAt",
+        w.title,
+        w.image,
+        w.format
+      FROM work_comments c
+      JOIN works w ON w.id = c.work_id
+      WHERE c.user_id = ${id}
+      ORDER BY c.created_at DESC
+      LIMIT 30
+    `;
+
+    const favoriteShips = await fastify.postgres`
+      SELECT
+        s.id,
+        s.name,
+        s.characters,
+        s.image
+      FROM ship_favorites sf
+      JOIN ships s ON s.id = sf.ship_id
+      WHERE sf.user_id = ${id}
+      ORDER BY sf.created_at DESC
+      LIMIT 30
+    `;
+
     return {
       user: {
         id: String(row.id),
@@ -187,6 +216,21 @@ export default async function userRoutes(
           format: String(w.format),
           image: String(w.image),
         })),
+        opinions: opinions.map((op) => ({
+          id: String(op.id),
+          workId: String(op.workId),
+          title: String(op.title),
+          image: String(op.image),
+          format: String(op.format),
+          text: String(op.text),
+          createdAt: new Date(op.createdAt).toISOString(),
+        })),
+        favoriteShips: favoriteShips.map((s) => ({
+          id: String(s.id),
+          name: String(s.name),
+          characters: String(s.characters),
+          image: String(s.image),
+        })),
       },
     };
   });
@@ -195,7 +239,7 @@ export default async function userRoutes(
    * GET /api/users/match
    *
    * Get users sorted by match score with the current user.
-   * Match is based on shared watched works, favorites, and communities.
+   * Match is based on shared watched works, favorites, communities, and ships.
    */
   fastify.get("/api/users/match", async (request, reply) => {
     const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
@@ -212,7 +256,7 @@ export default async function userRoutes(
       return reply.code(401).send({ error: "Invalid token" });
     }
 
-    // Weights: favorites have more weight (2), watched (1), communities (1), future ships (1)
+    // Weights: favorites have more weight (2), watched (1), communities (1), ships (1)
     const FAVORITE_WEIGHT = 2;
     const WATCHED_WEIGHT = 1;
     const COMMUNITY_WEIGHT = 1;
@@ -223,13 +267,14 @@ export default async function userRoutes(
       SELECT
         (SELECT COUNT(*) FROM watched_works WHERE user_id = ${currentUserId}) AS "totalWatched",
         (SELECT COUNT(*) FROM favorites WHERE user_id = ${currentUserId}) AS "totalFavorites",
-        (SELECT COUNT(*) FROM community_members WHERE user_id = ${currentUserId}) AS "totalCommunities"
+        (SELECT COUNT(*) FROM community_members WHERE user_id = ${currentUserId}) AS "totalCommunities",
+        (SELECT COUNT(*) FROM ship_favorites WHERE user_id = ${currentUserId}) AS "totalShips"
     `;
 
     const totalWatched = Number(totals.totalWatched || 0);
     const totalFavorites = Number(totals.totalFavorites || 0);
     const totalCommunities = Number(totals.totalCommunities || 0);
-    const totalShips = 0; // Future matching ships
+    const totalShips = Number(totals.totalShips || 0);
 
     const totalPossible =
       totalFavorites * FAVORITE_WEIGHT +
@@ -237,7 +282,7 @@ export default async function userRoutes(
       totalCommunities * COMMUNITY_WEIGHT +
       totalShips * SHIP_WEIGHT;
 
-    // Calculate match score based on shared watched, favorites, and communities
+    // Calculate match score based on shared watched, favorites, communities, and ships
     const rows = await fastify.postgres`
       WITH current_user_watched AS (
         SELECT work_id FROM watched_works WHERE user_id = ${currentUserId}
@@ -248,12 +293,17 @@ export default async function userRoutes(
       current_user_communities AS (
         SELECT community_id FROM community_members WHERE user_id = ${currentUserId}
       ),
+      current_user_ships AS (
+        SELECT ship_id FROM ship_favorites WHERE user_id = ${currentUserId}
+      ),
       other_users AS (
         SELECT DISTINCT user_id FROM watched_works WHERE user_id != ${currentUserId}
         UNION
         SELECT DISTINCT user_id FROM favorites WHERE user_id != ${currentUserId}
         UNION
         SELECT DISTINCT user_id FROM community_members WHERE user_id != ${currentUserId}
+        UNION
+        SELECT DISTINCT user_id FROM ship_favorites WHERE user_id != ${currentUserId}
         UNION
         SELECT id AS user_id FROM users WHERE id != ${currentUserId}
       )
@@ -266,12 +316,13 @@ export default async function userRoutes(
           u.avatar_url AS "avatarUrl",
           (SELECT COUNT(*) FROM watched_works wu WHERE wu.user_id = ou.user_id AND wu.work_id IN (SELECT work_id FROM current_user_watched)) AS "sharedWatched",
           (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ou.user_id AND f.work_id IN (SELECT work_id FROM current_user_favorites)) AS "sharedFavorites",
-          (SELECT COUNT(*) FROM community_members cm WHERE cm.user_id = ou.user_id AND cm.community_id IN (SELECT community_id FROM current_user_communities)) AS "sharedCommunities"
+          (SELECT COUNT(*) FROM community_members cm WHERE cm.user_id = ou.user_id AND cm.community_id IN (SELECT community_id FROM current_user_communities)) AS "sharedCommunities",
+          (SELECT COUNT(*) FROM ship_favorites sf WHERE sf.user_id = ou.user_id AND sf.ship_id IN (SELECT ship_id FROM current_user_ships)) AS "sharedShips"
         FROM other_users ou
         LEFT JOIN users u ON u.id = ou.user_id
       ) sub
       ORDER BY
-        ("sharedFavorites" * 2 + "sharedWatched" + "sharedCommunities") DESC,
+        ("sharedFavorites" * 2 + "sharedWatched" + "sharedCommunities" + "sharedShips") DESC,
         "sharedFavorites" DESC,
         "sharedWatched" DESC
       LIMIT 50
@@ -281,7 +332,7 @@ export default async function userRoutes(
       const sharedWatched = Number(row.sharedWatched || 0);
       const sharedFavorites = Number(row.sharedFavorites || 0);
       const sharedCommunities = Number(row.sharedCommunities || 0);
-      const sharedShips = 0; // Future matching ships
+      const sharedShips = Number(row.sharedShips || 0);
 
       const matchScore =
         sharedFavorites * FAVORITE_WEIGHT +

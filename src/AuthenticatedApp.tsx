@@ -7,6 +7,7 @@ const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
 interface LibraryResponse {
   favorites: string[];
   watched: string[];
+  commented?: string[];
   shareActivity: boolean;
   graphSynced: boolean;
 }
@@ -23,6 +24,7 @@ function isLibraryResponse(
     "watched" in value &&
     Array.isArray(value.watched) &&
     value.watched.every((id) => typeof id === "string") &&
+    (!("commented" in value) || (Array.isArray(value.commented) && value.commented.every((id) => typeof id === "string"))) &&
     "shareActivity" in value &&
     typeof value.shareActivity === "boolean" &&
     "graphSynced" in value &&
@@ -62,6 +64,7 @@ export default function AuthenticatedApp() {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [watchedIds, setWatchedIds] = useState<string[]>([]);
+  const [commentedIds, setCommentedIds] = useState<string[]>([]);
   const [shareActivity, setShareActivity] = useState(false);
   const [participationPending, setParticipationPending] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
@@ -79,6 +82,7 @@ export default function AuthenticatedApp() {
     if (!isSignedIn) {
       setSavedIds([]);
       setWatchedIds([]);
+      setCommentedIds([]);
       setShareActivity(false);
       setRecommendations([]);
       setRecommendationsError(null);
@@ -112,12 +116,14 @@ export default function AuthenticatedApp() {
         }
         setSavedIds(payload.favorites);
         setWatchedIds(payload.watched);
+        setCommentedIds(payload.commented ?? []);
         setShareActivity(payload.shareActivity);
         setGraphSyncPending(!payload.graphSynced);
       } catch (error) {
         if (controller.signal.aborted) return;
         setSavedIds([]);
         setWatchedIds([]);
+        setCommentedIds([]);
         setShareActivity(false);
         setFavoritesError(
           error instanceof Error ? error.message : "Could not load your account library.",
@@ -298,6 +304,7 @@ export default function AuthenticatedApp() {
       accountStatus={accountStatus}
       savedIds={savedIds}
       watchedIds={watchedIds}
+      commentedIds={commentedIds}
       shareActivity={shareActivity}
       participationPending={participationPending}
       recommendations={recommendations}

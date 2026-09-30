@@ -28,6 +28,7 @@ interface AppProps {
   accountStatus?: AccountStatus;
   savedIds?: string[];
   watchedIds?: string[];
+  commentedIds?: string[];
   recommendations?: PersonalizedRecommendation[];
   recommendationsLoading?: boolean;
   recommendationsError?: string | null;
@@ -292,6 +293,7 @@ function App({
   accountStatus = "disabled",
   savedIds = [],
   watchedIds = [],
+  commentedIds = [],
   recommendations = [],
   recommendationsLoading = false,
   recommendationsError = null,
@@ -315,6 +317,7 @@ function App({
   const [genre, setGenre] = useState("All stories");
   const [format, setFormat] = useState("All formats");
   const [activeNav, setActiveNav] = useState("Discover");
+  const [listFilter, setListFilter] = useState<"all" | "favorites" | "watched" | "reviewed">("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [catalogSection, setCatalogSection] = useState(0);
   const catalogGridRef = useRef<HTMLDivElement>(null);
@@ -370,6 +373,8 @@ function App({
     isPublic: boolean;
     favorites: Array<{ id: string; title: string; format: string; image: string }>;
     watched: Array<{ id: string; title: string; format: string; image: string }>;
+    opinions: Array<{ workId: string; workTitle: string; text: string; createdAt: string }>;
+    favoriteShips: Array<{ id: string; name: string; characters: string; image: string }>;
   } | null>(null);
   const [communityView, setCommunityView] = useState<"my" | "all">("my");
   const { getToken } = useAuth();
