@@ -259,6 +259,15 @@ button { color: inherit; }
 .comment-content { flex: 1; }
 .comment-author { display: block; margin-bottom: 2px; color: var(--rose); font-size: 10px; font-weight: 600; }
 .comment-content p { margin: 0; color: var(--ink); font-size: 11px; line-height: 1.5; }
+.user-matches { display: flex; flex-direction: column; gap: 10px; }
+.user-match-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #eee8e2; border-radius: 10px; background: #fff; }
+.user-match-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.user-match-info { flex: 1; }
+.user-match-info h4 { margin: 0 0 2px; font: 600 13px "Playfair Display", Georgia, serif; }
+.user-match-username { margin: 0 0 6px; color: var(--muted); font-size: 10px; }
+.user-match-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.user-match-stats span { color: #796b67; font-size: 9px; }
+.user-match-score { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 6px; background: #f5e9e7; color: var(--rose); font-size: 10px; font-weight: 600; flex-shrink: 0; }
 .chat-header-info { display: flex; align-items: center; gap: 10px; }
 .chat-community-image { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
 .chat-member-count { color: var(--muted); font-size: 10px; }

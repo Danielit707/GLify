@@ -273,6 +273,105 @@ function PersonalizedRecommendations({
   );
 }
 
+function UserMatches({
+  accountStatus,
+}: {
+  accountStatus: AccountStatus;
+  savedIds: string[];
+  watchedIds: string[];
+}) {
+  const [matches, setMatches] = useState<Array<{
+    userId: string;
+    username: string;
+    nametag: string;
+    avatarUrl: string | null;
+    sharedWatched: number;
+    sharedFavorites: number;
+    sharedCommunities: number;
+    matchScore: number;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth();
+  const { user } = useUser();
+
+  useEffect(() => {
+    if (accountStatus !== "signed-in") {
+      setLoading(false);
+      return;
+    }
+    const fetchMatches = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+        const token = await getToken();
+        const response = await fetch(`${apiBase}/api/users/match`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!response.ok) throw new Error("Failed to load matches");
+        const payload = await response.json();
+        setMatches(payload.matches);
+      } catch (error) {
+        console.error("Failed to load user matches:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMatches();
+  }, [accountStatus, getToken, user]);
+
+  if (accountStatus === "disabled") return null;
+
+  if (accountStatus === "signed-out") {
+    return (
+      <div className="community-empty">
+        <span><UsersRound size={28} /></span>
+        <h3>Sign in to find matching members</h3>
+        <p>See who shares your taste in stories based on watched, favorites, and communities.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <p className="favorites-prompt" role="status">Finding matching members…</p>;
+  }
+
+  if (matches.length === 0) {
+    return (
+      <div className="community-empty">
+        <span><UsersRound size={28} /></span>
+        <h3>No matching members yet</h3>
+        <p>Add favorites, mark works watched, or join communities to find members with similar interests.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="user-matches">
+      {matches.map((match) => (
+        <div className="user-match-card" key={match.userId}>
+          <img
+            className="user-match-avatar"
+            src={match.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(match.nametag)}
+            alt={match.nametag}
+          />
+          <div className="user-match-info">
+            <h4>{match.nametag}</h4>
+            <p className="user-match-username">@{match.username}</p>
+            <div className="user-match-stats">
+              <span>{match.sharedWatched} watched</span>
+              <span>{match.sharedFavorites} favorites</span>
+              <span>{match.sharedCommunities} communities</span>
+            </div>
+          </div>
+          <div className="user-match-score">
+            <Sparkles size={14} />
+            <span>{match.matchScore} shared</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App({
   accountStatus = "disabled",
   savedIds = [],
@@ -430,7 +529,15 @@ function App({
         const token = await getToken();
         await fetch(`${apiBase}/api/users/sync`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            username: user.username,
+            nametag: user.username,
+            avatarUrl: user.imageUrl,
+          }),
         });
       } catch (error) {
         console.error("Failed to sync user:", error);
@@ -448,7 +555,15 @@ function App({
         const token = await getToken();
         await fetch(`${apiBase}/api/users/sync`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            username: user.username,
+            nametag: user.username,
+            avatarUrl: user.imageUrl,
+          }),
         });
       } catch (error) {
         console.error("Failed to sync user on load:", error);
@@ -1615,14 +1730,14 @@ function App({
               <div>
                 <span className="section-kicker"><UsersRound size={14} /> MEMBERS</span>
                 <h2>Find your people</h2>
-                <p>Member profiles and discovery are coming soon.</p>
+                <p>Members with similar interests, ranked by shared watched, favorites, and communities.</p>
               </div>
             </div>
-            <div className="community-empty">
-              <span><UsersRound size={28} /></span>
-              <h3>Users section coming soon</h3>
-              <p>You'll be able to browse member profiles, see their favorites and watched lists, and connect with other GL fans.</p>
-            </div>
+            <UserMatches
+              accountStatus={accountStatus}
+              savedIds={savedIds}
+              watchedIds={watchedIds}
+            />
           </section>
         )}
       </main>

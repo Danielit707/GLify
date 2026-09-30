@@ -54,19 +54,19 @@ export default async function communityRoutes(
     }
 
     let userId = "unknown-user";
-    let username = "Unknown";
-    let nametag = "Unknown";
-    let avatarUrl: string | null = null;
     try {
       const payload = clerkToken.split(".")[1];
       const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
       userId = decoded.sub || decoded.user_id || "unknown-user";
-      username = decoded.name || decoded.username || "Unknown";
-      nametag = decoded.nickname || decoded.name || decoded.username || "Unknown";
-      avatarUrl = decoded.picture || decoded.avatar_url || null;
     } catch {
       return reply.code(401).send({ error: "Invalid token" });
     }
+
+    // Accept user data from frontend (Clerk user object)
+    const body = request.body as { username?: string; nametag?: string; avatarUrl?: string };
+    const username = body.username || "Unknown";
+    const nametag = body.nametag || body.username || "Unknown";
+    const avatarUrl = body.avatarUrl || null;
 
     await fastify.postgres`
       INSERT INTO users (id, username, nametag, avatar_url)
@@ -227,6 +227,73 @@ export default async function communityRoutes(
         })),
       },
     };
+  });
+
+  /**
+   * GET /api/users/match
+   *
+   * Get users sorted by match score with the current user.
+   * Match is based on shared watched works, favorites, and communities.
+   */
+  fastify.get("/api/users/match", async (request, reply) => {
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let currentUserId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      currentUserId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    // Calculate match score based on shared watched, favorites, and communities
+    const rows = await fastify.postgres`
+      WITH current_user_watched AS (
+        SELECT work_id FROM watched_works WHERE user_id = ${currentUserId}
+      ),
+      current_user_favorites AS (
+        SELECT work_id FROM favorites WHERE user_id = ${currentUserId}
+      ),
+      current_user_communities AS (
+        SELECT community_id FROM community_members WHERE user_id = ${currentUserId}
+      ),
+      other_users AS (
+        SELECT DISTINCT user_id FROM watched_works WHERE user_id != ${currentUserId}
+        UNION
+        SELECT DISTINCT user_id FROM favorites WHERE user_id != ${currentUserId}
+        UNION
+        SELECT DISTINCT user_id FROM community_members WHERE user_id != ${currentUserId}
+      )
+      SELECT
+        ou.user_id AS "userId",
+        u.username,
+        u.nametag,
+        u.avatar_url AS "avatarUrl",
+        (SELECT COUNT(*) FROM watched_works wu WHERE wu.user_id = ou.user_id AND wu.work_id IN (SELECT work_id FROM current_user_watched)) AS "sharedWatched",
+        (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ou.user_id AND f.work_id IN (SELECT work_id FROM current_user_favorites)) AS "sharedFavorites",
+        (SELECT COUNT(*) FROM community_members cm WHERE cm.user_id = ou.user_id AND cm.community_id IN (SELECT community_id FROM current_user_communities)) AS "sharedCommunities"
+      FROM other_users ou
+      LEFT JOIN users u ON u.id = ou.user_id
+      ORDER BY (sharedWatched + sharedFavorites + sharedCommunities) DESC
+      LIMIT 50
+    `;
+
+    const matches = rows.map((row) => ({
+      userId: String(row.userId),
+      username: row.username ? String(row.username) : "Unknown",
+      nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
+      avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+      sharedWatched: Number(row.sharedWatched),
+      sharedFavorites: Number(row.sharedFavorites),
+      sharedCommunities: Number(row.sharedCommunities),
+      matchScore: Number(row.sharedWatched) + Number(row.sharedFavorites) + Number(row.sharedCommunities),
+    }));
+
+    return { matches };
   });
 
   /**
