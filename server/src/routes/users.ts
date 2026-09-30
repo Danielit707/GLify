@@ -212,6 +212,12 @@ export default async function userRoutes(
       return reply.code(401).send({ error: "Invalid token" });
     }
 
+    // Weights: favorites have more weight (2), watched (1), communities (1), future ships (1)
+    const FAVORITE_WEIGHT = 2;
+    const WATCHED_WEIGHT = 1;
+    const COMMUNITY_WEIGHT = 1;
+    const SHIP_WEIGHT = 1;
+
     // Get current user's total counts for percentage calculation
     const [totals] = await fastify.postgres`
       SELECT
@@ -220,10 +226,16 @@ export default async function userRoutes(
         (SELECT COUNT(*) FROM community_members WHERE user_id = ${currentUserId}) AS "totalCommunities"
     `;
 
-    const totalWatched = Number(totals.totalWatched);
-    const totalFavorites = Number(totals.totalFavorites);
-    const totalCommunities = Number(totals.totalCommunities);
-    const totalPossible = totalWatched + totalFavorites + totalCommunities;
+    const totalWatched = Number(totals.totalWatched || 0);
+    const totalFavorites = Number(totals.totalFavorites || 0);
+    const totalCommunities = Number(totals.totalCommunities || 0);
+    const totalShips = 0; // Future matching ships
+
+    const totalPossible =
+      totalFavorites * FAVORITE_WEIGHT +
+      totalWatched * WATCHED_WEIGHT +
+      totalCommunities * COMMUNITY_WEIGHT +
+      totalShips * SHIP_WEIGHT;
 
     // Calculate match score based on shared watched, favorites, and communities
     const rows = await fastify.postgres`
@@ -242,36 +254,53 @@ export default async function userRoutes(
         SELECT DISTINCT user_id FROM favorites WHERE user_id != ${currentUserId}
         UNION
         SELECT DISTINCT user_id FROM community_members WHERE user_id != ${currentUserId}
+        UNION
+        SELECT id AS user_id FROM users WHERE id != ${currentUserId}
       )
-      SELECT
-        ou.user_id AS "userId",
-        u.username,
-        u.nametag,
-        u.avatar_url AS "avatarUrl",
-        (SELECT COUNT(*) FROM watched_works wu WHERE wu.user_id = ou.user_id AND wu.work_id IN (SELECT work_id FROM current_user_watched)) AS "sharedWatched",
-        (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ou.user_id AND f.work_id IN (SELECT work_id FROM current_user_favorites)) AS "sharedFavorites",
-        (SELECT COUNT(*) FROM community_members cm WHERE cm.user_id = ou.user_id AND cm.community_id IN (SELECT community_id FROM current_user_communities)) AS "sharedCommunities"
-      FROM other_users ou
-      LEFT JOIN users u ON u.id = ou.user_id
-      ORDER BY (sharedWatched + sharedFavorites + sharedCommunities) DESC
+      SELECT *
+      FROM (
+        SELECT
+          ou.user_id AS "userId",
+          COALESCE(u.username, 'Unknown') AS username,
+          COALESCE(u.nametag, u.username, 'Unknown') AS nametag,
+          u.avatar_url AS "avatarUrl",
+          (SELECT COUNT(*) FROM watched_works wu WHERE wu.user_id = ou.user_id AND wu.work_id IN (SELECT work_id FROM current_user_watched)) AS "sharedWatched",
+          (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ou.user_id AND f.work_id IN (SELECT work_id FROM current_user_favorites)) AS "sharedFavorites",
+          (SELECT COUNT(*) FROM community_members cm WHERE cm.user_id = ou.user_id AND cm.community_id IN (SELECT community_id FROM current_user_communities)) AS "sharedCommunities"
+        FROM other_users ou
+        LEFT JOIN users u ON u.id = ou.user_id
+      ) sub
+      ORDER BY
+        ("sharedFavorites" * 2 + "sharedWatched" + "sharedCommunities") DESC,
+        "sharedFavorites" DESC,
+        "sharedWatched" DESC
       LIMIT 50
     `;
 
     const matches = rows.map((row) => {
-      const sharedWatched = Number(row.sharedWatched);
-      const sharedFavorites = Number(row.sharedFavorites);
-      const sharedCommunities = Number(row.sharedCommunities);
-      const matchScore = sharedWatched + sharedFavorites + sharedCommunities;
-      const matchPercentage = totalPossible > 0 ? Math.round((matchScore / totalPossible) * 100) : 0;
+      const sharedWatched = Number(row.sharedWatched || 0);
+      const sharedFavorites = Number(row.sharedFavorites || 0);
+      const sharedCommunities = Number(row.sharedCommunities || 0);
+      const sharedShips = 0; // Future matching ships
+
+      const matchScore =
+        sharedFavorites * FAVORITE_WEIGHT +
+        sharedWatched * WATCHED_WEIGHT +
+        sharedCommunities * COMMUNITY_WEIGHT +
+        sharedShips * SHIP_WEIGHT;
+
+      const matchPercentage =
+        totalPossible > 0 ? Math.min(100, Math.round((matchScore / totalPossible) * 100)) : 0;
 
       return {
         userId: String(row.userId),
-        username: row.username ? String(row.username) : "Unknown",
-        nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
+        username: String(row.username),
+        nametag: String(row.nametag),
         avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
         sharedWatched,
         sharedFavorites,
         sharedCommunities,
+        sharedShips,
         matchScore,
         matchPercentage,
       };

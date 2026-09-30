@@ -12,14 +12,17 @@ interface MatchUser {
   sharedWatched: number;
   sharedFavorites: number;
   sharedCommunities: number;
+  sharedShips?: number;
   matchScore: number;
   matchPercentage: number;
 }
 
 export default function UserMatches({
   accountStatus,
+  onSelectUser,
 }: {
   accountStatus: AccountStatus;
+  onSelectUser?: (userId: string) => void;
 }) {
   const [matches, setMatches] = useState<MatchUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +107,19 @@ export default function UserMatches({
       </div>
       <div className="user-matches">
         {filteredMatches.map((match) => (
-          <div className="user-match-card" key={match.userId}>
+          <div
+            className={`user-match-card${onSelectUser ? " user-match-card-clickable" : ""}`}
+            key={match.userId}
+            onClick={() => onSelectUser?.(match.userId)}
+            role={onSelectUser ? "button" : undefined}
+            tabIndex={onSelectUser ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (onSelectUser && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onSelectUser(match.userId);
+              }
+            }}
+          >
             <img
               className="user-match-avatar"
               src={match.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(match.nametag)}
@@ -114,9 +129,12 @@ export default function UserMatches({
               <h4>{match.nametag}</h4>
               <p className="user-match-username">@{match.username}</p>
               <div className="user-match-stats">
-                <span>{match.sharedWatched} watched</span>
                 <span>{match.sharedFavorites} favorites</span>
+                <span>{match.sharedWatched} watched</span>
                 <span>{match.sharedCommunities} communities</span>
+                {typeof match.sharedShips === "number" && match.sharedShips > 0 && (
+                  <span>{match.sharedShips} ships</span>
+                )}
               </div>
             </div>
             <div className="user-match-score">

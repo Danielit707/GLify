@@ -162,3 +162,70 @@ test("a favorite and watched flag for the same work do not double-count as separ
   const duplicate = rankPersonalizedWorks("current", works, withDuplicate, 10);
   assert.deepEqual(duplicate, base);
 });
+
+test("matching communities boosts member similarity and recommendation score", () => {
+  const scoredWorks: RecommendationWork[] = [
+    { id: "shared", title: "Shared", format: "Manga", tags: ["Yuri"] },
+    { id: "community-neighbor-pick", title: "Community Pick", format: "Manga", tags: ["Yuri"] },
+    { id: "other-neighbor-pick", title: "Other Pick", format: "Manga", tags: ["Yuri"] },
+  ];
+  const interactions: WorkInteraction[] = [
+    { userId: "current", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-with-community", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-with-community", workId: "community-neighbor-pick", kind: "favorite" },
+    { userId: "neighbor-without-community", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-without-community", workId: "other-neighbor-pick", kind: "favorite" },
+  ];
+  const communityInteractions = [
+    { userId: "current", communityId: "yuri-fanatics" },
+    { userId: "neighbor-with-community", communityId: "yuri-fanatics" },
+  ];
+
+  const { recommendations } = rankPersonalizedWorks(
+    "current",
+    scoredWorks,
+    interactions,
+    10,
+    communityInteractions,
+  );
+  const communityPick = recommendations.find((w) => w.id === "community-neighbor-pick");
+  const otherPick = recommendations.find((w) => w.id === "other-neighbor-pick");
+
+  assert.ok(communityPick);
+  assert.ok(otherPick);
+  assert.ok(communityPick.similarMemberScore > otherPick.similarMemberScore);
+});
+
+test("matching ships boosts member similarity and recommendation score", () => {
+  const scoredWorks: RecommendationWork[] = [
+    { id: "shared", title: "Shared", format: "Manga", tags: ["Yuri"] },
+    { id: "ship-neighbor-pick", title: "Ship Pick", format: "Manga", tags: ["Yuri"] },
+    { id: "plain-neighbor-pick", title: "Plain Pick", format: "Manga", tags: ["Yuri"] },
+  ];
+  const interactions: WorkInteraction[] = [
+    { userId: "current", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-ship", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-ship", workId: "ship-neighbor-pick", kind: "favorite" },
+    { userId: "neighbor-plain", workId: "shared", kind: "favorite" },
+    { userId: "neighbor-plain", workId: "plain-neighbor-pick", kind: "favorite" },
+  ];
+  const shipInteractions = [
+    { userId: "current", shipId: "touko-yuu" },
+    { userId: "neighbor-ship", shipId: "touko-yuu" },
+  ];
+
+  const { recommendations } = rankPersonalizedWorks(
+    "current",
+    scoredWorks,
+    interactions,
+    10,
+    [],
+    shipInteractions,
+  );
+  const shipPick = recommendations.find((w) => w.id === "ship-neighbor-pick");
+  const plainPick = recommendations.find((w) => w.id === "plain-neighbor-pick");
+
+  assert.ok(shipPick);
+  assert.ok(plainPick);
+  assert.ok(shipPick.similarMemberScore > plainPick.similarMemberScore);
+});

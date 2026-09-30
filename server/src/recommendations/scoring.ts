@@ -38,10 +38,22 @@ export function filterEligibleInteractions(
   );
 }
 
-const FAVORITE_WEIGHT = 2;
-const WATCHED_WEIGHT = 1;
-const TAG_WEIGHT = 0.35;
-const SIMILAR_MEMBER_WEIGHT = 0.65;
+export interface CommunityInteraction {
+  userId: string;
+  communityId: string;
+}
+
+export interface ShipInteraction {
+  userId: string;
+  shipId: string;
+}
+
+export const FAVORITE_WEIGHT = 2;
+export const WATCHED_WEIGHT = 1;
+export const COMMUNITY_WEIGHT = 1;
+export const SHIP_WEIGHT = 1;
+export const TAG_WEIGHT = 0.35;
+export const SIMILAR_MEMBER_WEIGHT = 0.65;
 
 function interactionWeight(kind: WorkInteraction["kind"]): number {
   return kind === "favorite" ? FAVORITE_WEIGHT : WATCHED_WEIGHT;
@@ -55,14 +67,14 @@ function weightedJaccard(
   left: Map<string, number>,
   right: Map<string, number>,
 ): number {
-  const workIds = new Set([...left.keys(), ...right.keys()]);
-  if (workIds.size === 0) return 0;
+  const signalIds = new Set([...left.keys(), ...right.keys()]);
+  if (signalIds.size === 0) return 0;
 
   let intersection = 0;
   let union = 0;
-  for (const workId of workIds) {
-    const leftWeight = left.get(workId) ?? 0;
-    const rightWeight = right.get(workId) ?? 0;
+  for (const signalId of signalIds) {
+    const leftWeight = left.get(signalId) ?? 0;
+    const rightWeight = right.get(signalId) ?? 0;
     intersection += Math.min(leftWeight, rightWeight);
     union += Math.max(leftWeight, rightWeight);
   }
@@ -74,37 +86,57 @@ export function rankPersonalizedWorks(
   works: RecommendationWork[],
   interactions: WorkInteraction[],
   limit: number,
+  communityInteractions: CommunityInteraction[] = [],
+  shipInteractions: ShipInteraction[] = [],
 ): PersonalizedRecommendationResult {
   const workById = new Map(works.map((work) => [work.id, work]));
-  const interactionWeights = new Map<string, Map<string, number>>();
+  const workInteractionWeights = new Map<string, Map<string, number>>();
+  const userMatchingSignals = new Map<string, Map<string, number>>();
+
+  const addSignal = (uId: string, signalKey: string, weight: number) => {
+    const signals = userMatchingSignals.get(uId) ?? new Map<string, number>();
+    signals.set(signalKey, Math.max(signals.get(signalKey) ?? 0, weight));
+    userMatchingSignals.set(uId, signals);
+  };
 
   for (const interaction of interactions) {
     if (!workById.has(interaction.workId)) continue;
-    const profile = interactionWeights.get(interaction.userId) ?? new Map<string, number>();
+    const profile = workInteractionWeights.get(interaction.userId) ?? new Map<string, number>();
     const weight = interactionWeight(interaction.kind);
     profile.set(interaction.workId, Math.max(profile.get(interaction.workId) ?? 0, weight));
-    interactionWeights.set(interaction.userId, profile);
+    workInteractionWeights.set(interaction.userId, profile);
+    addSignal(interaction.userId, `work:${interaction.workId}`, weight);
   }
 
-  const userProfile = interactionWeights.get(userId) ?? new Map<string, number>();
-  if (userProfile.size === 0) {
+  for (const interaction of communityInteractions) {
+    addSignal(interaction.userId, `community:${interaction.communityId}`, COMMUNITY_WEIGHT);
+  }
+
+  for (const interaction of shipInteractions) {
+    addSignal(interaction.userId, `ship:${interaction.shipId}`, SHIP_WEIGHT);
+  }
+
+  const userMatchingProfile = userMatchingSignals.get(userId) ?? new Map<string, number>();
+  const userWorkProfile = workInteractionWeights.get(userId) ?? new Map<string, number>();
+  if (userMatchingProfile.size === 0 && userWorkProfile.size === 0) {
     return { recommendations: [], coldStart: true };
   }
-  const interactedWorkIds = new Set(userProfile.keys());
+  const interactedWorkIds = new Set(userWorkProfile.keys());
   const interestWeights = new Map<string, number>();
 
-  for (const [workId, weight] of userProfile) {
+  for (const [workId, weight] of userWorkProfile) {
     const tags = new Set((workById.get(workId)?.tags ?? []).map((tag) => tag.toLowerCase()));
     for (const normalizedTag of tags) {
       interestWeights.set(normalizedTag, (interestWeights.get(normalizedTag) ?? 0) + weight);
     }
   }
 
-  const neighbors = [...interactionWeights.entries()]
+  const neighbors = [...userMatchingSignals.entries()]
     .filter(([neighborId]) => neighborId !== userId)
-    .map(([neighborId, profile]) => ({
-      profile,
-      matchScore: weightedJaccard(userProfile, profile) * 100,
+    .map(([neighborId, neighborSignals]) => ({
+      neighborId,
+      profile: workInteractionWeights.get(neighborId) ?? new Map<string, number>(),
+      matchScore: weightedJaccard(userMatchingProfile, neighborSignals) * 100,
     }))
     .filter((neighbor) => neighbor.matchScore > 0);
 

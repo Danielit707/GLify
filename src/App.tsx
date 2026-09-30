@@ -198,6 +198,7 @@ function PersonalizedRecommendations({
   error,
   coldStart,
   catalogWorks,
+  onSelectWork,
 }: {
   accountStatus: AccountStatus;
   recommendations: PersonalizedRecommendation[];
@@ -205,6 +206,7 @@ function PersonalizedRecommendations({
   error: string | null;
   coldStart: boolean;
   catalogWorks: Work[];
+  onSelectWork?: (work: Work) => void;
 }) {
   if (accountStatus === "disabled") return null;
 
@@ -240,7 +242,15 @@ function PersonalizedRecommendations({
             {recommendations.map((work) => {
               const workImage = catalogWorks.find((w) => w.id === work.id)?.image;
               return (
-                <article className="similar-card" key={work.id}>
+                <article
+                  className={`similar-card${onSelectWork ? " similar-card-clickable" : ""}`}
+                  key={work.id}
+                  onClick={() => {
+                    const fullWork = catalogWorks.find((w) => w.id === work.id);
+                    if (fullWork && onSelectWork) onSelectWork(fullWork);
+                  }}
+                  style={onSelectWork ? { cursor: "pointer" } : undefined}
+                >
                   {workImage && (
                     <div className="similar-image">
                       <img src={workImage} alt={work.title} loading="lazy" />
@@ -725,6 +735,7 @@ function App({
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
       const token = await getToken();
+      if (!token) return;
       const response = await fetch(`${apiBase}/api/works/${selectedWork.id}/comments`, {
         method: "POST",
         headers: {
@@ -735,10 +746,14 @@ function App({
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to add comment");
+        throw new Error(error.error || "Failed to save opinion");
       }
       const payload = await response.json();
-      setWorkComments((prev) => [payload.comment, ...prev]);
+      const updated = { ...payload.comment, workId: selectedWork.id };
+      setWorkComments((prev) => {
+        const remaining = prev.filter((c) => c.userId !== updated.userId);
+        return [updated, ...remaining];
+      });
       setNewComment("");
     } catch (error) {
       console.error("Failed to add comment:", error);
@@ -1126,6 +1141,7 @@ function App({
               error={recommendationsError}
               coldStart={recommendationsColdStart}
               catalogWorks={catalogWorks}
+              onSelectWork={openWorkDetail}
             />
           </section>
         )}
@@ -1477,44 +1493,43 @@ function App({
                   {(() => {
                     const currentUserId = user?.id;
                     const userComment = workComments.find((c) => c.userId === currentUserId);
-                    const otherComments = workComments.filter((c) => c.userId !== currentUserId);
 
                     return (
                       <>
-                        {userComment && (
+                        {accountStatus === "signed-in" ? (
                           <div className="comment-form">
-                            <label className="your-opinion-label">Your opinion:</label>
-                            <div className="your-opinion-display">
-                              <p>{userComment.text}</p>
-                            </div>
+                            <input
+                              type="text"
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  submitComment();
+                                }
+                              }}
+                              placeholder={userComment ? "Update your opinion..." : "Share your thoughts on this story..."}
+                              maxLength={1000}
+                            />
+                            <button
+                              type="button"
+                              onClick={submitComment}
+                              disabled={!newComment.trim()}
+                            >
+                              {userComment ? "Update" : "Post"}
+                            </button>
                           </div>
+                        ) : (
+                          <SignInButton mode="modal">
+                            <button type="button" className="opinion-signin-btn">
+                              Sign in to share your opinion
+                            </button>
+                          </SignInButton>
                         )}
-                        <div className="comment-form">
-                          <input
-                            type="text"
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                submitComment();
-                              }
-                            }}
-                            placeholder={userComment ? "Update your opinion..." : "Share your thoughts..."}
-                            maxLength={1000}
-                          />
-                          <button
-                            type="button"
-                            onClick={submitComment}
-                            disabled={!newComment.trim()}
-                          >
-                            {userComment ? "Update" : "Post"}
-                          </button>
-                        </div>
                         <div className="comment-list">
-                          {otherComments.length === 0 && !userComment ? (
-                            <p className="chat-empty">No opinions yet. Be the first!</p>
+                          {workComments.length === 0 ? (
+                            <p className="chat-empty">No opinions yet. Be the first to share your thoughts!</p>
                           ) : (
-                            otherComments.map((comment) => (
+                            workComments.map((comment) => (
                               <div className="comment-item" key={comment.id}>
                                 <img
                                   className="comment-avatar"
@@ -1522,7 +1537,22 @@ function App({
                                   alt={comment.nametag}
                                 />
                                 <div className="comment-content">
-                                  <span className="comment-author">{comment.nametag}</span>
+                                  <div className="comment-header-row">
+                                    <span className="comment-author">
+                                      {comment.nametag}
+                                      {comment.userId === currentUserId && (
+                                        <span className="comment-you-badge">You</span>
+                                      )}
+                                    </span>
+                                    {comment.createdAt && (
+                                      <span className="comment-date">
+                                        {new Date(comment.createdAt).toLocaleDateString(undefined, {
+                                          month: "short",
+                                          day: "numeric",
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
                                   <p>{comment.text}</p>
                                 </div>
                               </div>
@@ -1620,7 +1650,7 @@ function App({
                 <p>Members with similar interests, ranked by shared watched, favorites, and communities.</p>
               </div>
             </div>
-            <UserMatches accountStatus={accountStatus} />
+            <UserMatches accountStatus={accountStatus} onSelectUser={viewMemberProfile} />
           </section>
         )}
 

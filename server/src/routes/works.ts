@@ -124,11 +124,12 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
     const rows = await fastify.postgres`
       SELECT
         c.id,
+        c.work_id AS "workId",
         c.user_id AS "userId",
         c.text,
         c.created_at AS "createdAt",
-        u.username,
-        u.nametag,
+        COALESCE(u.username, 'Unknown') AS username,
+        COALESCE(u.nametag, u.username, 'Unknown') AS nametag,
         u.avatar_url AS "avatarUrl"
       FROM work_comments c
       LEFT JOIN users u ON u.id = c.user_id
@@ -139,11 +140,12 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
 
     const comments = rows.map((row) => ({
       id: String(row.id),
+      workId: String(row.workId || workId),
       userId: String(row.userId),
       text: String(row.text),
       createdAt: String(row.createdAt),
-      username: row.username ? String(row.username) : "Unknown",
-      nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
+      username: String(row.username),
+      nametag: String(row.nametag),
       avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
     }));
 
@@ -153,7 +155,7 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
   /**
    * POST /api/works/:workId/comments
    *
-   * Add a comment to a work. One comment per user per work.
+   * Add or update a comment for a work. One comment per user per work.
    */
   fastify.post("/api/works/:workId/comments", async (request, reply) => {
     const { workId } = request.params as { workId: string };
@@ -184,36 +186,57 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(400).send({ error: "Comment text is required (max 1000 chars)" });
     }
 
+    // Ensure work exists in database if it's from catalog
+    const workExists = await fastify.postgres`
+      SELECT id FROM works WHERE id = ${workId}
+    `;
+    if (workExists.length === 0) {
+      return reply.code(404).send({ error: "Work not found" });
+    }
+
     // Sync user data (only update avatar, preserve custom username/nametag)
     await fastify.postgres`
       INSERT INTO users (id, username, nametag, avatar_url)
       VALUES (${userId}, ${username}, ${nametag}, ${avatarUrl})
       ON CONFLICT (id) DO UPDATE SET
-        avatar_url = EXCLUDED.avatar_url
+        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
     `;
 
     const commentId = randomUUID();
-    try {
-      await fastify.postgres`
-        INSERT INTO work_comments (id, work_id, user_id, text)
-        VALUES (${commentId}, ${workId}, ${userId}, ${text})
-      `;
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("unique constraint")) {
-        return reply.code(409).send({ error: "You have already commented on this work" });
-      }
-      throw error;
-    }
+    const rows = await fastify.postgres`
+      INSERT INTO work_comments (id, work_id, user_id, text, created_at)
+      VALUES (${commentId}, ${workId}, ${userId}, ${text}, now())
+      ON CONFLICT (work_id, user_id) DO UPDATE SET
+        text = EXCLUDED.text,
+        created_at = now()
+      RETURNING id, work_id AS "workId", user_id AS "userId", text, created_at AS "createdAt"
+    `;
 
-    return reply.code(201).send({
+    const saved = rows[0];
+    const userRow = await fastify.postgres`
+      SELECT username, nametag, avatar_url AS "avatarUrl"
+      FROM users
+      WHERE id = ${userId}
+    `;
+
+    const currentUsername = userRow[0]?.username ? String(userRow[0].username) : username;
+    const currentNametag = userRow[0]?.nametag
+      ? String(userRow[0].nametag)
+      : userRow[0]?.username
+        ? String(userRow[0].username)
+        : nametag;
+    const currentAvatarUrl = userRow[0]?.avatarUrl ? String(userRow[0].avatarUrl) : avatarUrl;
+
+    return reply.code(200).send({
       comment: {
-        id: commentId,
-        userId,
-        username,
-        nametag,
-        avatarUrl,
-        text,
-        createdAt: new Date().toISOString(),
+        id: String(saved.id),
+        workId: String(saved.workId || workId),
+        userId: String(saved.userId),
+        username: currentUsername,
+        nametag: currentNametag,
+        avatarUrl: currentAvatarUrl,
+        text: String(saved.text),
+        createdAt: new Date(saved.createdAt).toISOString(),
       },
     });
   });

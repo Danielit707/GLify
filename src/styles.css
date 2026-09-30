@@ -253,14 +253,21 @@ button { color: inherit; }
 .comment-form input { flex: 1; padding: 8px 10px; border: 1px solid #e9e2dd; border-radius: 6px; font-size: 11px; font-family: inherit; }
 .comment-form button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--rose); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
 .comment-form button:disabled { opacity: .5; cursor: not-allowed; }
+.opinion-signin-btn { width: 100%; padding: 8px 14px; border: 1px dashed #d5c8be; border-radius: 6px; background: #faf8f5; color: var(--rose); font-size: 11px; font-weight: 600; cursor: pointer; margin-bottom: 12px; transition: background .15s ease; }
+.opinion-signin-btn:hover { background: #f5ece7; }
 .comment-list { display: flex; flex-direction: column; gap: 10px; }
 .comment-item { display: flex; gap: 8px; }
 .comment-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .comment-content { flex: 1; }
-.comment-author { display: block; margin-bottom: 2px; color: var(--rose); font-size: 10px; font-weight: 600; }
+.comment-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.comment-author { display: inline-flex; align-items: center; color: var(--rose); font-size: 10px; font-weight: 600; }
+.comment-you-badge { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #f5e9e7; color: var(--rose); font-size: 8px; font-weight: 600; text-transform: uppercase; }
+.comment-date { color: var(--muted); font-size: 9px; }
 .comment-content p { margin: 0; color: var(--ink); font-size: 11px; line-height: 1.5; }
 .user-matches { display: flex; flex-direction: column; gap: 10px; }
 .user-match-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #eee8e2; border-radius: 10px; background: #fff; }
+.user-match-card-clickable { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.user-match-card-clickable:hover { border-color: var(--rose); box-shadow: 0 2px 8px rgba(164, 71, 99, 0.08); }
 .user-match-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .user-match-info { flex: 1; }
 .user-match-info h4 { margin: 0 0 2px; font: 600 13px "Playfair Display", Georgia, serif; }
