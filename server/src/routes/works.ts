@@ -2,6 +2,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { FastifyInstance } from "fastify";
+import { moderateContent } from "../moderation.js";
 
 type WorkFormat = "Manga" | "Manhwa" | "Light novel" | "Live action" | "Anime" | "Webtoon";
 
@@ -186,6 +187,11 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(400).send({ error: "Comment text is required (max 1000 chars)" });
     }
 
+    const moderation = await moderateContent({ text });
+    if (!moderation.allowed) {
+      return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
+
     // Ensure work exists in database if it's from catalog
     const workExists = await fastify.postgres`
       SELECT id FROM works WHERE id = ${workId}
@@ -265,6 +271,11 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
 
     if (!text || text.trim().length === 0) {
       return reply.code(400).send({ error: "Comment text cannot be empty" });
+    }
+
+    const moderation = await moderateContent({ text: text.trim() });
+    if (!moderation.allowed) {
+      return reply.code(moderation.statusCode).send({ error: moderation.error });
     }
 
     try {

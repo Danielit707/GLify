@@ -11,6 +11,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { moderateContent } from "../moderation.js";
 
 const CreateCommunitySchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -178,6 +179,10 @@ export default async function communityRoutes(
     }
 
     const { name, description, isGeneral, workIds, image } = parsed.data;
+    const moderation = await moderateContent({ text: `${name}\n${description}`, imageUrl: image });
+    if (!moderation.allowed) {
+      return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
 
     const communityId = randomUUID();
 
@@ -467,6 +472,11 @@ export default async function communityRoutes(
     `;
     if (memberCheck.length === 0) {
       return reply.code(403).send({ error: "You must be a member to send messages" });
+    }
+
+    const moderation = await moderateContent({ text });
+    if (!moderation.allowed) {
+      return reply.code(moderation.statusCode).send({ error: moderation.error });
     }
 
     const messageId = randomUUID();

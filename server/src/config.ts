@@ -34,6 +34,7 @@ const EnvSchema = z.object({
   NEO4J_USER: z.string().min(1).optional(),
   NEO4J_PASSWORD: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
   DATABASE_URL: DatabaseUrlSchema,
   UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),

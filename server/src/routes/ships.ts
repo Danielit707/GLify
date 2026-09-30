@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { moderateContent } from "../moderation.js";
 
 const CreateShipSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -94,6 +95,10 @@ export default async function shipRoutes(fastify: FastifyInstance): Promise<void
 
     const shipId = randomUUID();
     const { name, characters, image } = parsed.data;
+    const moderation = await moderateContent({ text: `${name}\n${characters}`, imageUrl: image });
+    if (!moderation.allowed) {
+      return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
 
     await fastify.postgres`
       INSERT INTO ships (id, name, characters, image, created_by)
