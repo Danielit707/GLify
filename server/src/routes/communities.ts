@@ -330,6 +330,156 @@ export default async function communityRoutes(
   });
 
   /**
+   * GET /api/communities/:id/messages
+   *
+   * Get chat messages for a community. Requires membership.
+   */
+  fastify.get("/api/communities/:id/messages", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    // Verify membership
+    const memberCheck = await fastify.postgres`
+      SELECT 1 FROM community_members
+      WHERE community_id = ${id} AND user_id = ${userId}
+      LIMIT 1
+    `;
+    if (memberCheck.length === 0) {
+      return reply.code(403).send({ error: "You must be a member to view messages" });
+    }
+
+    const rows = await fastify.postgres`
+      SELECT
+        id,
+        user_id AS "userId",
+        username,
+        avatar_url AS "avatarUrl",
+        text,
+        created_at AS "createdAt"
+      FROM chat_messages
+      WHERE community_id = ${id}
+      ORDER BY created_at ASC
+      LIMIT 200
+    `;
+
+    const messages = rows.map((row) => ({
+      id: String(row.id),
+      userId: String(row.userId),
+      username: String(row.username),
+      avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+      text: String(row.text),
+      createdAt: String(row.createdAt),
+    }));
+
+    return { messages };
+  });
+
+  /**
+   * POST /api/communities/:id/messages
+   *
+   * Send a chat message. Requires membership.
+   */
+  fastify.post("/api/communities/:id/messages", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    let username = "Unknown";
+    let avatarUrl: string | null = null;
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+      username = decoded.name || decoded.username || "Unknown";
+      avatarUrl = decoded.picture || decoded.avatar_url || null;
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    const body = request.body as { text?: string };
+    const text = body.text?.trim();
+    if (!text || text.length > 1000) {
+      return reply.code(400).send({ error: "Message text is required (max 1000 chars)" });
+    }
+
+    // Verify membership
+    const memberCheck = await fastify.postgres`
+      SELECT 1 FROM community_members
+      WHERE community_id = ${id} AND user_id = ${userId}
+      LIMIT 1
+    `;
+    if (memberCheck.length === 0) {
+      return reply.code(403).send({ error: "You must be a member to send messages" });
+    }
+
+    const messageId = randomUUID();
+    await fastify.postgres`
+      INSERT INTO chat_messages (id, community_id, user_id, username, avatar_url, text)
+      VALUES (${messageId}, ${id}, ${userId}, ${username}, ${avatarUrl}, ${text})
+    `;
+
+    return reply.code(201).send({
+      message: {
+        id: messageId,
+        userId,
+        username,
+        avatarUrl,
+        text,
+        createdAt: new Date().toISOString(),
+      },
+    });
+  });
+
+  /**
+   * GET /api/communities/:id/members
+   *
+   * Get members of a community with their profile pictures.
+   */
+  fastify.get("/api/communities/:id/members", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const rows = await fastify.postgres`
+      SELECT
+        cm.user_id AS "userId",
+        cm.role,
+        cm.joined_at AS "joinedAt",
+        u.username,
+        u.avatar_url AS "avatarUrl"
+      FROM community_members cm
+      LEFT JOIN users u ON u.id = cm.user_id
+      WHERE cm.community_id = ${id}
+      ORDER BY cm.joined_at ASC
+    `;
+
+    const members = rows.map((row) => ({
+      userId: String(row.userId),
+      role: String(row.role),
+      username: row.username ? String(row.username) : "Unknown",
+      avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+      joinedAt: String(row.joinedAt),
+    }));
+
+    return { members };
+  });
+
+  /**
    * GET /api/communities/:id
    *
    * Get a single community by ID.

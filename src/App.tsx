@@ -15,7 +15,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useUser, useAuth } from "@clerk/react";
+import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
@@ -319,9 +319,22 @@ function App({
   const [creatingCommunity, setCreatingCommunity] = useState(false);
   const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
   const [chatMessage, setChatMessage] = useState("");
-  const [chatMessages, setChatMessages] = useState<Array<{ id: string; author: string; text: string; timestamp: string }>>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    id: string;
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    text: string;
+    createdAt: string;
+  }>>([]);
+  const [communityMembers, setCommunityMembers] = useState<Array<{
+    userId: string;
+    role: string;
+    username: string;
+    avatarUrl: string | null;
+    joinedAt: string;
+  }>>([]);
   const [communityView, setCommunityView] = useState<"my" | "all">("my");
-  const { user } = useUser();
   const { getToken } = useAuth();
 
   useEffect(() => {
@@ -474,6 +487,89 @@ function App({
     } catch (error) {
       console.error("Failed to join community:", error);
     }
+  }
+
+  async function openCommunityChat(community: Community) {
+    setSelectedCommunity(community);
+    setChatMessages([]);
+    setCommunityMembers([]);
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+
+      // Fetch messages
+      const msgResponse = await fetch(`${apiBase}/api/communities/${community.id}/messages`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (msgResponse.ok) {
+        const msgPayload = await msgResponse.json();
+        setChatMessages(msgPayload.messages);
+      }
+
+      // Fetch members
+      const memResponse = await fetch(`${apiBase}/api/communities/${community.id}/members`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (memResponse.ok) {
+        const memPayload = await memResponse.json();
+        setCommunityMembers(memPayload.members);
+      }
+    } catch (error) {
+      console.error("Failed to open community chat:", error);
+    }
+  }
+
+  async function sendChatMessage() {
+    if (!chatMessage.trim() || !selectedCommunity) return;
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/communities/${selectedCommunity.id}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: chatMessage.trim() }),
+      });
+      if (!response.ok) throw new Error(`Failed to send message: ${response.status}`);
+      const payload = await response.json();
+      setChatMessages((prev) => [...prev, payload.message]);
+      setChatMessage("");
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
+  }
+
+  // Poll for new messages every 5 seconds when chat is open
+  useEffect(() => {
+    if (!selectedCommunity) return;
+    const interval = setInterval(async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+        const token = await getToken();
+        const response = await fetch(`${apiBase}/api/communities/${selectedCommunity.id}/messages`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          setChatMessages(payload.messages);
+        }
+      } catch {
+        // Silently fail on poll errors
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [selectedCommunity]);
+
+  function shouldShowAvatar(message: typeof chatMessages[0], index: number): boolean {
+    if (index === 0) return true;
+    const prev = chatMessages[index - 1];
+    if (prev.userId !== message.userId) return true;
+    const timeDiff = new Date(message.createdAt).getTime() - new Date(prev.createdAt).getTime();
+    return timeDiff > 5 * 60 * 1000; // 5 minutes
   }
 
   async function leaveCommunity(communityId: string) {
@@ -966,7 +1062,7 @@ function App({
                       return (
                         <article className="community-card" key={community.id}>
                           {community.image && (
-                            <div className="community-image clickable" onClick={() => isMember && setSelectedCommunity(community)}>
+                            <div className="community-image clickable" onClick={() => isMember && openCommunityChat(community)}>
                               <img src={community.image} alt={community.name} loading="lazy" />
                             </div>
                           )}
@@ -977,7 +1073,7 @@ function App({
                           <span className={`community-type ${community.isGeneral ? "is-general" : "is-work"}`}>
                             {community.isGeneral ? "General" : workName ?? "Work-focused"}
                           </span>
-                          <h3 className="clickable" onClick={() => isMember && setSelectedCommunity(community)}>
+                          <h3 className="clickable" onClick={() => isMember && openCommunityChat(community)}>
                             {community.name}
                           </h3>
                           <p>{community.description}</p>
@@ -1009,22 +1105,61 @@ function App({
           <div className="chat-overlay" onClick={() => setSelectedCommunity(null)}>
             <div className="chat-panel" onClick={(e) => e.stopPropagation()}>
               <div className="chat-header">
-                <h3>{selectedCommunity.name}</h3>
+                <div className="chat-header-info">
+                  {selectedCommunity.image && (
+                    <img className="chat-community-image" src={selectedCommunity.image} alt={selectedCommunity.name} />
+                  )}
+                  <div>
+                    <h3>{selectedCommunity.name}</h3>
+                    <span className="chat-member-count">{communityMembers.length} members</span>
+                  </div>
+                </div>
                 <button type="button" className="close-chat" onClick={() => setSelectedCommunity(null)}>
                   <X size={18} />
                 </button>
               </div>
-              <div className="chat-messages">
-                {chatMessages.length === 0 ? (
-                  <p className="chat-empty">No messages yet. Say hello!</p>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div className="chat-message" key={msg.id}>
-                      <span className="chat-author">{msg.author}</span>
-                      <p>{msg.text}</p>
-                    </div>
-                  ))
-                )}
+              <div className="chat-body">
+                <div className="chat-messages">
+                  {chatMessages.length === 0 ? (
+                    <p className="chat-empty">No messages yet. Say hello!</p>
+                  ) : (
+                    chatMessages.map((msg, index) => (
+                      <div className="chat-message" key={msg.id}>
+                        {shouldShowAvatar(msg, index) && (
+                          <img
+                            className="chat-avatar"
+                            src={msg.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(msg.username)}
+                            alt={msg.username}
+                          />
+                        )}
+                        <div className="chat-message-content">
+                          {shouldShowAvatar(msg, index) && (
+                            <span className="chat-author">{msg.username}</span>
+                          )}
+                          <p>{msg.text}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="chat-sidebar">
+                  <h4>Members</h4>
+                  <div className="member-list">
+                    {communityMembers.map((member) => (
+                      <div className="member-item" key={member.userId}>
+                        <img
+                          className="member-avatar"
+                          src={member.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(member.username)}
+                          alt={member.username}
+                        />
+                        <div className="member-info">
+                          <span className="member-name">{member.username}</span>
+                          <span className="member-role">{member.role}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="chat-input">
                 <input
@@ -1032,37 +1167,15 @@ function App({
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && chatMessage.trim()) {
-                      setChatMessages((prev) => [
-                        ...prev,
-                        {
-                          id: crypto.randomUUID(),
-                          author: user?.username ?? "You",
-                          text: chatMessage.trim(),
-                          timestamp: new Date().toISOString(),
-                        },
-                      ]);
-                      setChatMessage("");
+                    if (e.key === "Enter") {
+                      sendChatMessage();
                     }
                   }}
                   placeholder="Type a message..."
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    if (chatMessage.trim()) {
-                      setChatMessages((prev) => [
-                        ...prev,
-                        {
-                          id: crypto.randomUUID(),
-                          author: user?.username ?? "You",
-                          text: chatMessage.trim(),
-                          timestamp: new Date().toISOString(),
-                        },
-                      ]);
-                      setChatMessage("");
-                    }
-                  }}
+                  onClick={sendChatMessage}
                   disabled={!chatMessage.trim()}
                 >
                   Send
