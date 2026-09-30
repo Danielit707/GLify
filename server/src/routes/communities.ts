@@ -161,12 +161,11 @@ export default async function communityRoutes(
       return reply.code(401).send({ error: "Invalid token" });
     }
 
-    // Sync user data
+    // Sync user data (only update avatar, preserve custom username/nametag)
     await fastify.postgres`
       INSERT INTO users (id, username, avatar_url)
       VALUES (${userId}, ${username}, ${avatarUrl})
       ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
         avatar_url = EXCLUDED.avatar_url
     `;
 
@@ -275,12 +274,11 @@ export default async function communityRoutes(
     }
 
     try {
-      // Sync user data
+      // Sync user data (only update avatar, preserve custom username/nametag)
       await fastify.postgres`
         INSERT INTO users (id, username, avatar_url)
         VALUES (${userId}, ${username}, ${avatarUrl})
         ON CONFLICT (id) DO UPDATE SET
-          username = EXCLUDED.username,
           avatar_url = EXCLUDED.avatar_url
       `;
 
@@ -439,12 +437,11 @@ export default async function communityRoutes(
       return reply.code(401).send({ error: "Invalid token" });
     }
 
-    // Sync user data
+    // Sync user data (only update avatar, preserve custom username/nametag)
     await fastify.postgres`
       INSERT INTO users (id, username, avatar_url)
       VALUES (${userId}, ${username}, ${avatarUrl})
       ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
         avatar_url = EXCLUDED.avatar_url
     `;
 

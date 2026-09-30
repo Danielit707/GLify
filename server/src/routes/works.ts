@@ -184,13 +184,11 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(400).send({ error: "Comment text is required (max 1000 chars)" });
     }
 
-    // Sync user data
+    // Sync user data (only update avatar, preserve custom username/nametag)
     await fastify.postgres`
       INSERT INTO users (id, username, nametag, avatar_url)
       VALUES (${userId}, ${username}, ${nametag}, ${avatarUrl})
       ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
-        nametag = EXCLUDED.nametag,
         avatar_url = EXCLUDED.avatar_url
     `;
 
