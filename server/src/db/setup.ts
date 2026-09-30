@@ -227,7 +227,8 @@ async function setupDatabase(): Promise<void> {
       await transaction`
         CREATE TABLE IF NOT EXISTS users (
           id text PRIMARY KEY,
-          username text,
+          username text UNIQUE,
+          nametag text,
           avatar_url text,
           created_at timestamptz NOT NULL DEFAULT now()
         )

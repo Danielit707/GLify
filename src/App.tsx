@@ -194,18 +194,14 @@ function PersonalizedRecommendations({
   loading,
   error,
   coldStart,
-  shareActivity,
-  participationPending,
-  onSetRecommendationParticipation,
+  catalogWorks,
 }: {
   accountStatus: AccountStatus;
   recommendations: PersonalizedRecommendation[];
   loading: boolean;
   error: string | null;
   coldStart: boolean;
-  shareActivity: boolean;
-  participationPending: boolean;
-  onSetRecommendationParticipation: (enabled: boolean) => void;
+  catalogWorks: Work[];
 }) {
   if (accountStatus === "disabled") return null;
 
@@ -216,18 +212,9 @@ function PersonalizedRecommendations({
         Recommendations combine 35% tag fit and 65% activity from members with similar interests.
       </p>
       {accountStatus === "signed-in" && (
-        <label className="recommendation-sharing">
-          <input
-            type="checkbox"
-            checked={shareActivity}
-            disabled={participationPending}
-            onChange={(event) => onSetRecommendationParticipation(event.target.checked)}
-          />
-          <span>
-            Let my favorites and watched/read list help recommend stories to similar members.
-            You can change this any time; it does not affect your own recommendations.
-          </span>
-        </label>
+        <p className="favorites-prompt">
+          You can make your saves private in settings.
+        </p>
       )}
       {accountStatus === "signed-out" ? (
         <p className="favorites-prompt">Sign in to build personalized recommendations from your favorites and watched/read list.</p>
@@ -247,30 +234,38 @@ function PersonalizedRecommendations({
             </p>
           )}
           <div className="similar-grid">
-            {recommendations.map((work) => (
-              <article className="similar-card" key={work.id}>
-                <span className="similar-format">{work.format}</span>
-                <h4>{work.title}</h4>
-                <p className="similar-match">
-                  <Sparkles size={11} /> {work.recommendationScore.toFixed(1)}% overall match
-                </p>
-                <p className="recommendation-components">
-                  35% tags: {work.tagFitScore.toFixed(1)}% · 65% similar-member activity: {work.similarMemberScore.toFixed(1)}%
-                </p>
-                {!coldStart && (
-                  <p className="recommendation-components">
-                    Informed by {work.similarMemberCount} similar member{work.similarMemberCount === 1 ? "" : "s"}
+            {recommendations.map((work) => {
+              const workImage = catalogWorks.find((w) => w.id === work.id)?.image;
+              return (
+                <article className="similar-card" key={work.id}>
+                  {workImage && (
+                    <div className="similar-image">
+                      <img src={workImage} alt={work.title} loading="lazy" />
+                    </div>
+                  )}
+                  <span className="similar-format">{work.format}</span>
+                  <h4>{work.title}</h4>
+                  <p className="similar-match">
+                    <Sparkles size={11} /> {work.recommendationScore.toFixed(1)}% overall match
                   </p>
-                )}
-                {work.sharedTags.length > 0 && (
-                  <div className="tag-row">
-                    {work.sharedTags.slice(0, 3).map((tag) => (
-                      <span className="tag" key={tag}>{tag}</span>
-                    ))}
-                  </div>
-                )}
-              </article>
-            ))}
+                  <p className="recommendation-components">
+                    35% tags: {work.tagFitScore.toFixed(1)}% · 65% similar-member activity: {work.similarMemberScore.toFixed(1)}%
+                  </p>
+                  {!coldStart && (
+                    <p className="recommendation-components">
+                      Informed by {work.similarMemberCount} similar member{work.similarMemberCount === 1 ? "" : "s"}
+                    </p>
+                  )}
+                  {work.sharedTags.length > 0 && (
+                    <div className="tag-row">
+                      {work.sharedTags.slice(0, 3).map((tag) => (
+                        <span className="tag" key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </>
       )}
@@ -323,6 +318,7 @@ function App({
     id: string;
     userId: string;
     username: string;
+    nametag: string;
     avatarUrl: string | null;
     text: string;
     createdAt: string;
@@ -331,9 +327,22 @@ function App({
     userId: string;
     role: string;
     username: string;
+    nametag: string;
     avatarUrl: string | null;
     joinedAt: string;
   }>>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editingUsername, setEditingUsername] = useState("");
+  const [editingNametag, setEditingNametag] = useState("");
+  const [selectedMember, setSelectedMember] = useState<{
+    userId: string;
+    username: string;
+    nametag: string;
+    avatarUrl: string | null;
+    isPublic: boolean;
+    favorites: Array<{ id: string; title: string; format: string; image: string }>;
+    watched: Array<{ id: string; title: string; format: string; image: string }>;
+  } | null>(null);
   const [communityView, setCommunityView] = useState<"my" | "all">("my");
   const { getToken } = useAuth();
   const { user } = useUser();
@@ -523,7 +532,10 @@ function App({
       });
       if (msgResponse.ok) {
         const msgPayload = await msgResponse.json();
-        setChatMessages(msgPayload.messages);
+        setChatMessages(msgPayload.messages.map((m: any) => ({
+          ...m,
+          nametag: m.nametag || m.username || "Unknown",
+        })));
       }
 
       // Fetch members
@@ -532,7 +544,10 @@ function App({
       });
       if (memResponse.ok) {
         const memPayload = await memResponse.json();
-        setCommunityMembers(memPayload.members);
+        setCommunityMembers(memPayload.members.map((m: any) => ({
+          ...m,
+          nametag: m.nametag || m.username || "Unknown",
+        })));
       }
     } catch (error) {
       console.error("Failed to open community chat:", error);
@@ -589,6 +604,46 @@ function App({
     if (prev.userId !== message.userId) return true;
     const timeDiff = new Date(message.createdAt).getTime() - new Date(prev.createdAt).getTime();
     return timeDiff > 5 * 60 * 1000; // 5 minutes
+  }
+
+  async function updateProfile() {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/users/me`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          username: editingUsername.trim(),
+          nametag: editingNametag.trim(),
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update profile");
+      }
+      setShowSettings(false);
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+    }
+  }
+
+  async function viewMemberProfile(userId: string) {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/users/${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) throw new Error("Failed to load member profile");
+      const payload = await response.json();
+      setSelectedMember(payload.user);
+    } catch (error) {
+      console.error("Failed to load member profile:", error);
+    }
   }
 
   async function leaveCommunity(communityId: string) {
@@ -726,6 +781,18 @@ function App({
           ))}
         </nav>
         <div className="header-actions">
+          <button
+            type="button"
+            className="settings-button"
+            aria-label="Settings"
+            onClick={() => {
+              setEditingUsername(user?.username ?? "");
+              setEditingNametag(user?.username ?? "");
+              setShowSettings(true);
+            }}
+          >
+            <UsersRound size={16} />
+          </button>
           <AuthenticationControls />
         </div>
       </header>
@@ -923,9 +990,7 @@ function App({
               loading={favoritesLoading || recommendationsLoading}
               error={recommendationsError}
               coldStart={recommendationsColdStart}
-              shareActivity={shareActivity}
-              participationPending={participationPending}
-              onSetRecommendationParticipation={onSetRecommendationParticipation}
+              catalogWorks={catalogWorks}
             />
           </section>
         )}
@@ -1147,13 +1212,13 @@ function App({
                         {shouldShowAvatar(msg, index) && (
                           <img
                             className="chat-avatar"
-                            src={msg.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(msg.username)}
-                            alt={msg.username}
+                            src={msg.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(msg.nametag)}
+                            alt={msg.nametag}
                           />
                         )}
                         <div className="chat-message-content">
                           {shouldShowAvatar(msg, index) && (
-                            <span className="chat-author">{msg.username}</span>
+                            <span className="chat-author">{msg.nametag}</span>
                           )}
                           <p>{msg.text}</p>
                         </div>
@@ -1165,14 +1230,14 @@ function App({
                   <h4>Members</h4>
                   <div className="member-list">
                     {communityMembers.map((member) => (
-                      <div className="member-item" key={member.userId}>
+                      <div className="member-item clickable" key={member.userId} onClick={() => viewMemberProfile(member.userId)}>
                         <img
                           className="member-avatar"
-                          src={member.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(member.username)}
-                          alt={member.username}
+                          src={member.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(member.nametag)}
+                          alt={member.nametag}
                         />
                         <div className="member-info">
-                          <span className="member-name">{member.username}</span>
+                          <span className="member-name">{member.nametag}</span>
                           <span className="member-role">{member.role}</span>
                         </div>
                       </div>
@@ -1199,6 +1264,127 @@ function App({
                 >
                   Send
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSettings && (
+          <div className="chat-overlay" onClick={() => setShowSettings(false)}>
+            <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="chat-header">
+                <h3>Settings</h3>
+                <button type="button" className="close-chat" onClick={() => setShowSettings(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="settings-body">
+                <div className="settings-section">
+                  <h4>Profile</h4>
+                  <label>
+                    <span>Username (unique)</span>
+                    <input
+                      type="text"
+                      value={editingUsername}
+                      onChange={(e) => setEditingUsername(e.target.value)}
+                      placeholder="Username"
+                      maxLength={30}
+                    />
+                  </label>
+                  <label>
+                    <span>Nametag (shown in chats)</span>
+                    <input
+                      type="text"
+                      value={editingNametag}
+                      onChange={(e) => setEditingNametag(e.target.value)}
+                      placeholder="Nametag"
+                      maxLength={30}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="submit-community"
+                    onClick={updateProfile}
+                    disabled={!editingUsername.trim() || !editingNametag.trim()}
+                  >
+                    Save profile
+                  </button>
+                </div>
+                <div className="settings-section">
+                  <h4>Privacy</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={shareActivity}
+                      disabled={participationPending}
+                      onChange={(event) => onSetRecommendationParticipation(event.target.checked)}
+                    />
+                    <span>
+                      Let my favorites and watched/read list help recommend stories to similar members.
+                      You can change this any time; it does not affect your own recommendations.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedMember && (
+          <div className="chat-overlay" onClick={() => setSelectedMember(null)}>
+            <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="chat-header">
+                <h3>Member profile</h3>
+                <button type="button" className="close-chat" onClick={() => setSelectedMember(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="settings-body">
+                <div className="member-profile">
+                  <img
+                    className="member-profile-avatar"
+                    src={selectedMember.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(selectedMember.nametag)}
+                    alt={selectedMember.nametag}
+                  />
+                  <h4>{selectedMember.nametag}</h4>
+                  <p className="member-profile-username">@{selectedMember.username}</p>
+                </div>
+                {selectedMember.isPublic ? (
+                  <>
+                    <div className="settings-section">
+                      <h4>Favorites</h4>
+                      {selectedMember.favorites.length === 0 ? (
+                        <p className="chat-empty">No public favorites</p>
+                      ) : (
+                        <div className="profile-works">
+                          {selectedMember.favorites.map((work) => (
+                            <div className="profile-work" key={work.id}>
+                              <img src={work.image} alt={work.title} />
+                              <span>{work.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="settings-section">
+                      <h4>Watched / read</h4>
+                      {selectedMember.watched.length === 0 ? (
+                        <p className="chat-empty">No public watched/read</p>
+                      ) : (
+                        <div className="profile-works">
+                          {selectedMember.watched.map((work) => (
+                            <div className="profile-work" key={work.id}>
+                              <img src={work.image} alt={work.title} />
+                              <span>{work.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="chat-empty">This member's activity is private.</p>
+                )}
               </div>
             </div>
           </div>

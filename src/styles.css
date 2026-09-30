@@ -49,6 +49,8 @@ button { color: inherit; }
 .header-actions { display: flex; align-items: center; gap: 20px; }
 .sign-in-button, .join-button { border: 0; background: none; font-size: 13px; cursor: pointer; }
 .sign-in-button { color: #615956; }
+.settings-button { display: grid; place-items: center; padding: 7px; border: 0; border-radius: 7px; background: transparent; color: #5c5150; cursor: pointer; }
+.settings-button:hover { background: #f4efec; }
 .join-button { display: inline-flex; align-items: center; gap: 8px; padding: 11px 15px; border-radius: 8px; color: #fff; background: var(--rose); font-weight: 600; transition: background .2s, transform .2s; }
 .join-button:hover, .hero-cta:hover { background: var(--rose-dark); transform: translateY(-1px); }
 .auth-setup-notice { max-width: 220px; margin: 0; color: #806b66; font-size: 10px; line-height: 1.4; text-align: right; }
@@ -212,6 +214,27 @@ button { color: inherit; }
 .chat-input input:focus { outline: 2px solid #d9a1ae; outline-offset: 1px; }
 .chat-input button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--rose); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
 .chat-input button:disabled { opacity: .5; cursor: not-allowed; }
+.settings-panel { width: min(480px, 90vw); max-height: min(600px, 80vh); display: flex; flex-direction: column; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.settings-body { flex: 1; overflow-y: auto; padding: 16px; }
+.settings-section { margin-bottom: 20px; }
+.settings-section h4 { margin: 0 0 10px; font: 600 13px "Playfair Display", Georgia, serif; }
+.settings-section label { display: block; margin-bottom: 10px; }
+.settings-section label span { display: block; margin-bottom: 4px; color: #796b67; font-size: 10px; font-weight: 600; }
+.settings-section input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid #e9e2dd; border-radius: 6px; font-size: 11px; font-family: inherit; }
+.settings-section input:focus { outline: 2px solid #d9a1ae; outline-offset: 1px; }
+.settings-section .checkbox-label { display: flex; align-items: flex-start; gap: 8px; }
+.settings-section .checkbox-label input { accent-color: var(--rose); margin-top: 2px; }
+.settings-section .checkbox-label span { margin: 0; }
+.member-profile { text-align: center; margin-bottom: 16px; }
+.member-profile-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; }
+.member-profile h4 { margin: 0 0 2px; font: 600 16px "Playfair Display", Georgia, serif; }
+.member-profile-username { margin: 0; color: var(--muted); font-size: 11px; }
+.profile-works { display: flex; flex-direction: column; gap: 6px; }
+.profile-work { display: flex; align-items: center; gap: 8px; }
+.profile-work img { width: 32px; height: 42px; object-fit: cover; border-radius: 4px; }
+.profile-work span { color: var(--ink); font-size: 10px; }
+.similar-image { width: 100%; height: 100px; overflow: hidden; border-radius: 6px; margin-bottom: 8px; background: #f5eeea; }
+.similar-image img { width: 100%; height: 100%; object-fit: cover; }
 .chat-header-info { display: flex; align-items: center; gap: 10px; }
 .chat-community-image { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
 .chat-member-count { color: var(--muted); font-size: 10px; }
