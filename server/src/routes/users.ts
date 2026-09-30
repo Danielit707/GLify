@@ -70,40 +70,36 @@ export default async function userRoutes(
     }
 
     const body = request.body as { username?: string; nametag?: string };
-    const updates: string[] = [];
-    const params: any[] = [];
 
-    if (body.username !== undefined) {
-      const username = body.username.trim();
-      if (username.length < 1 || username.length > 30) {
-        return reply.code(400).send({ error: "Username must be 1-30 characters" });
-      }
-      params.push(username);
-      updates.push(`username = $${params.length}`);
+    const username = body.username?.trim();
+    const nametag = body.nametag?.trim();
+
+    if (username !== undefined && (username.length < 1 || username.length > 30)) {
+      return reply.code(400).send({ error: "Username must be 1-30 characters" });
     }
 
-    if (body.nametag !== undefined) {
-      const nametag = body.nametag.trim();
-      if (nametag.length < 1 || nametag.length > 30) {
-        return reply.code(400).send({ error: "Nametag must be 1-30 characters" });
-      }
-      params.push(nametag);
-      updates.push(`nametag = $${params.length}`);
+    if (nametag !== undefined && (nametag.length < 1 || nametag.length > 30)) {
+      return reply.code(400).send({ error: "Nametag must be 1-30 characters" });
     }
 
-    if (updates.length === 0) {
+    if (username === undefined && nametag === undefined) {
       return reply.code(400).send({ error: "No fields to update" });
     }
 
     try {
-      params.push(userId);
-      const result = await fastify.postgres.unsafe(
-        `INSERT INTO users (id, username, nametag, avatar_url)
-         VALUES ($${params.length}, $${params.length - updates.length}, $${params.length - updates.length + 1}, NULL)
-         ON CONFLICT (id) DO UPDATE SET ${updates.join(", ")}
-         RETURNING id, username, nametag, avatar_url AS "avatarUrl"`,
-        params
-      );
+      const result = await fastify.postgres`
+        INSERT INTO users (id, username, nametag, avatar_url)
+        VALUES (
+          ${userId},
+          ${username ?? null},
+          ${nametag ?? null},
+          NULL
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          username = COALESCE(EXCLUDED.username, users.username),
+          nametag = COALESCE(EXCLUDED.nametag, users.nametag)
+        RETURNING id, username, nametag, avatar_url AS "avatarUrl"
+      `;
 
       const row = result[0];
       return {
@@ -218,6 +214,19 @@ export default async function userRoutes(
       return reply.code(401).send({ error: "Invalid token" });
     }
 
+    // Get current user's total counts for percentage calculation
+    const [totals] = await fastify.postgres`
+      SELECT
+        (SELECT COUNT(*) FROM watched_works WHERE user_id = ${currentUserId}) AS "totalWatched",
+        (SELECT COUNT(*) FROM favorites WHERE user_id = ${currentUserId}) AS "totalFavorites",
+        (SELECT COUNT(*) FROM community_members WHERE user_id = ${currentUserId}) AS "totalCommunities"
+    `;
+
+    const totalWatched = Number(totals.totalWatched);
+    const totalFavorites = Number(totals.totalFavorites);
+    const totalCommunities = Number(totals.totalCommunities);
+    const totalPossible = totalWatched + totalFavorites + totalCommunities;
+
     // Calculate match score based on shared watched, favorites, and communities
     const rows = await fastify.postgres`
       WITH current_user_watched AS (
@@ -250,16 +259,25 @@ export default async function userRoutes(
       LIMIT 50
     `;
 
-    const matches = rows.map((row) => ({
-      userId: String(row.userId),
-      username: row.username ? String(row.username) : "Unknown",
-      nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
-      avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
-      sharedWatched: Number(row.sharedWatched),
-      sharedFavorites: Number(row.sharedFavorites),
-      sharedCommunities: Number(row.sharedCommunities),
-      matchScore: Number(row.sharedWatched) + Number(row.sharedFavorites) + Number(row.sharedCommunities),
-    }));
+    const matches = rows.map((row) => {
+      const sharedWatched = Number(row.sharedWatched);
+      const sharedFavorites = Number(row.sharedFavorites);
+      const sharedCommunities = Number(row.sharedCommunities);
+      const matchScore = sharedWatched + sharedFavorites + sharedCommunities;
+      const matchPercentage = totalPossible > 0 ? Math.round((matchScore / totalPossible) * 100) : 0;
+
+      return {
+        userId: String(row.userId),
+        username: row.username ? String(row.username) : "Unknown",
+        nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
+        avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+        sharedWatched,
+        sharedFavorites,
+        sharedCommunities,
+        matchScore,
+        matchPercentage,
+      };
+    });
 
     return { matches };
   });

@@ -289,6 +289,7 @@ function UserMatches({
     sharedFavorites: number;
     sharedCommunities: number;
     matchScore: number;
+    matchPercentage: number;
   }>>([]);
   const [loading, setLoading] = useState(true);
   const { getToken } = useAuth();
@@ -364,7 +365,7 @@ function UserMatches({
           </div>
           <div className="user-match-score">
             <Sparkles size={14} />
-            <span>{match.matchScore} shared</span>
+            <span>{match.matchPercentage}% match</span>
           </div>
         </div>
       ))}
@@ -663,6 +664,7 @@ function App({
   }
 
   async function openCommunityChat(community: Community) {
+    setSelectedWork(null);
     setSelectedCommunity(community);
     setChatMessages([]);
     setCommunityMembers([]);
