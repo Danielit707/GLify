@@ -318,7 +318,6 @@ function App({
   const [genre, setGenre] = useState("All stories");
   const [format, setFormat] = useState("All formats");
   const [activeNav, setActiveNav] = useState("Discover");
-  const [listFilter, setListFilter] = useState<"all" | "favorites" | "watched" | "reviewed">("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [catalogSection, setCatalogSection] = useState(0);
   const catalogGridRef = useRef<HTMLDivElement>(null);
@@ -374,7 +373,7 @@ function App({
     isPublic: boolean;
     favorites: Array<{ id: string; title: string; format: string; image: string }>;
     watched: Array<{ id: string; title: string; format: string; image: string }>;
-    opinions: Array<{ workId: string; workTitle: string; text: string; createdAt: string }>;
+    opinions: Array<{ workId: string; title: string; text: string; createdAt: string }>;
     favoriteShips: Array<{ id: string; name: string; characters: string; image: string }>;
   } | null>(null);
 
@@ -391,29 +390,8 @@ function App({
   const { user } = useUser();
 
   useEffect(() => {
-  if (accountStatus !== "signed-in" || !user) return;
-  const fetchUserComments = async () => {
-    try {
-      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
-      const token = await getToken();
-      const response = await fetch(`${apiBase}/api/users/${user.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (response.ok) {
-        const payload = await response.json();
-        const comments = payload.user.comments || [];
-        const ids = comments.map((c: { workTitle: string }) => {
-          const match = catalogWorks.find((w) => w.title === c.workTitle);
-          return match ? match.id : null;
-        }).filter(Boolean) as string[];
-        setCommentedWorkIds(ids);
-      }
-    } catch (error) {
-      console.error("Failed to load user comment IDs:", error);
-    }
-  };
-  fetchUserComments();
-}, [accountStatus, user, catalogWorks]);
+    setCommentedWorkIds(commentedIds);
+  }, [commentedIds]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -794,6 +772,9 @@ function App({
         const remaining = prev.filter((c) => c.userId !== updated.userId);
         return [updated, ...remaining];
       });
+      setCommentedWorkIds((current) =>
+        current.includes(selectedWork.id) ? current : [...current, selectedWork.id],
+      );
       setNewComment("");
     } catch (error) {
       console.error("Failed to add comment:", error);
@@ -837,6 +818,7 @@ async function handleDeleteOpinion() {
     });
     if (!response.ok) throw new Error("Failed to delete opinion");
     setWorkComments((prev) => prev.filter((c) => c.userId !== user?.id));
+    setCommentedWorkIds((current) => current.filter((workId) => workId !== selectedWork.id));
     setEditingOpinion(false);
   } catch (error) {
     console.error("Failed to delete opinion:", error);
@@ -1813,15 +1795,15 @@ async function handleDeleteOpinion() {
 
     <div className="settings-section">
       <h4>Posted Opinions</h4>
-      {!selectedMember.comments || selectedMember.comments.length === 0 ? (
+      {selectedMember.opinions.length === 0 ? (
         <p className="chat-empty">No public opinions</p>
       ) : (
         <div className="comment-list">
-          {selectedMember.comments.map((comment) => (
-            <div className="comment-item" key={comment.id}>
+          {selectedMember.opinions.map((opinion) => (
+            <div className="comment-item" key={opinion.workId}>
               <div className="comment-content">
-                <span className="comment-author">{comment.workTitle}</span>
-                <p>"{comment.text}"</p>
+                <span className="comment-author">{opinion.title}</span>
+                <p>"{opinion.text}"</p>
               </div>
             </div>
           ))}
@@ -1831,7 +1813,7 @@ async function handleDeleteOpinion() {
 
     <div className="settings-section">
       <h4>Favorite Ships</h4>
-      {!selectedMember.favoriteShips || selectedMember.favoriteShips.length > 0 ? (
+      {selectedMember.favoriteShips.length === 0 ? (
         <p className="chat-empty">No favorite ships</p>
       ) : (
         <div className="profile-works">
@@ -1872,7 +1854,7 @@ async function handleDeleteOpinion() {
 
         {activeNav === "Ships" && (
           <section className="content-width" id="ships" style={{ padding: "40px 0 76px" }}>
-            <Ships />
+            <Ships accountStatus={accountStatus} />
           </section>
         )}
       </main>
