@@ -6,7 +6,7 @@ interface Ship {
   id: string;
   name: string;
   image: string;
-  characters: string[];
+  characters: string;
   createdBy: string;
   createdAt: string;
   likeCount: number;
@@ -52,14 +52,13 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
       const token = await getToken();
-      const characterList = characters.split(",").map((c) => c.trim()).filter(Boolean);
       const response = await fetch(`${apiBase}/api/ships`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: name.trim(), image: image.trim(), characters: characterList }),
+        body: JSON.stringify({ name: name.trim(), image: image.trim(), characters: characters.trim() }),
       });
       if (response.ok) {
         setName("");
@@ -178,7 +177,7 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
                 <img src={ship.image} alt={ship.name} loading="lazy" />
               </div>
               <h3>{ship.name}</h3>
-              <p>{ship.characters.join(" × ")}</p>
+              <p>{ship.characters}</p>
               <div className="community-card-actions">
                 <button
                   type="button"
