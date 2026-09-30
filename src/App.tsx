@@ -15,7 +15,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react";
+import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
@@ -336,6 +336,7 @@ function App({
   }>>([]);
   const [communityView, setCommunityView] = useState<"my" | "all">("my");
   const { getToken } = useAuth();
+  const { user } = useUser();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -398,6 +399,24 @@ function App({
   useEffect(() => {
     setCatalogSection(0);
   }, [activeNav, format, genre, query]);
+
+  // Sync user data when signed in
+  useEffect(() => {
+    if (!user) return;
+    const syncUser = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+        const token = await getToken();
+        await fetch(`${apiBase}/api/users/sync`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (error) {
+        console.error("Failed to sync user:", error);
+      }
+    };
+    syncUser();
+  }, [user]);
 
   useEffect(() => {
     if (activeNav !== "Communities") return;

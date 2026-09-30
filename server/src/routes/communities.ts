@@ -41,6 +41,43 @@ export default async function communityRoutes(
   fastify: FastifyInstance
 ): Promise<void> {
   /**
+   * POST /api/users/sync
+   *
+   * Sync the current user's data to the users table.
+   * Called when a user signs in to ensure their data is available
+   * for community member lists, chat messages, etc.
+   */
+  fastify.post("/api/users/sync", async (request, reply) => {
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    let username = "Unknown";
+    let avatarUrl: string | null = null;
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+      username = decoded.name || decoded.username || "Unknown";
+      avatarUrl = decoded.picture || decoded.avatar_url || null;
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    await fastify.postgres`
+      INSERT INTO users (id, username, avatar_url)
+      VALUES (${userId}, ${username}, ${avatarUrl})
+      ON CONFLICT (id) DO UPDATE SET
+        username = EXCLUDED.username,
+        avatar_url = EXCLUDED.avatar_url
+    `;
+
+    return { success: true, user: { id: userId, username, avatarUrl } };
+  });
+
+  /**
    * GET /api/communities
    *
    * List communities with optional filtering.
