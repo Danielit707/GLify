@@ -233,6 +233,8 @@ async function setupDatabase(): Promise<void> {
           created_at timestamptz NOT NULL DEFAULT now()
         )
       `;
+      await transaction`ALTER TABLE users ADD COLUMN IF NOT EXISTS nametag text`;
+      await transaction`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text`;
 
       for (const work of seedWorks) {
         await transaction`
