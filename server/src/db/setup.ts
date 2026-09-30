@@ -245,8 +245,14 @@ async function setupDatabase(): Promise<void> {
         )
       `;
       await transaction`
-        ALTER TABLE work_comments
-        ADD CONSTRAINT IF NOT EXISTS work_comments_unique UNIQUE (work_id, user_id)
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'work_comments_unique'
+          ) THEN
+            ALTER TABLE work_comments ADD CONSTRAINT work_comments_unique UNIQUE (work_id, user_id);
+          END IF;
+        END $$;
       `;
 
       for (const work of seedWorks) {
