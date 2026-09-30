@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { FastifyInstance } from "fastify";
 
@@ -110,5 +111,112 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
     `;
 
     return { works: rows.map(toCatalogWork) };
+  });
+
+  /**
+   * GET /api/works/:workId/comments
+   *
+   * Get comments for a work.
+   */
+  fastify.get("/api/works/:workId/comments", async (request, reply) => {
+    const { workId } = request.params as { workId: string };
+
+    const rows = await fastify.postgres`
+      SELECT
+        c.id,
+        c.user_id AS "userId",
+        c.text,
+        c.created_at AS "createdAt",
+        u.username,
+        u.nametag,
+        u.avatar_url AS "avatarUrl"
+      FROM work_comments c
+      LEFT JOIN users u ON u.id = c.user_id
+      WHERE c.work_id = ${workId}
+      ORDER BY c.created_at DESC
+      LIMIT 100
+    `;
+
+    const comments = rows.map((row) => ({
+      id: String(row.id),
+      userId: String(row.userId),
+      text: String(row.text),
+      createdAt: String(row.createdAt),
+      username: row.username ? String(row.username) : "Unknown",
+      nametag: row.nametag ? String(row.nametag) : row.username ? String(row.username) : "Unknown",
+      avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+    }));
+
+    return { comments };
+  });
+
+  /**
+   * POST /api/works/:workId/comments
+   *
+   * Add a comment to a work. One comment per user per work.
+   */
+  fastify.post("/api/works/:workId/comments", async (request, reply) => {
+    const { workId } = request.params as { workId: string };
+
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    let username = "Unknown";
+    let nametag = "Unknown";
+    let avatarUrl: string | null = null;
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+      username = decoded.name || decoded.username || "Unknown";
+      nametag = decoded.nickname || decoded.name || decoded.username || "Unknown";
+      avatarUrl = decoded.picture || decoded.avatar_url || null;
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    const body = request.body as { text?: string };
+    const text = body.text?.trim();
+    if (!text || text.length > 1000) {
+      return reply.code(400).send({ error: "Comment text is required (max 1000 chars)" });
+    }
+
+    // Sync user data
+    await fastify.postgres`
+      INSERT INTO users (id, username, nametag, avatar_url)
+      VALUES (${userId}, ${username}, ${nametag}, ${avatarUrl})
+      ON CONFLICT (id) DO UPDATE SET
+        username = EXCLUDED.username,
+        nametag = EXCLUDED.nametag,
+        avatar_url = EXCLUDED.avatar_url
+    `;
+
+    const commentId = randomUUID();
+    try {
+      await fastify.postgres`
+        INSERT INTO work_comments (id, work_id, user_id, text)
+        VALUES (${commentId}, ${workId}, ${userId}, ${text})
+      `;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("unique constraint")) {
+        return reply.code(409).send({ error: "You have already commented on this work" });
+      }
+      throw error;
+    }
+
+    return reply.code(201).send({
+      comment: {
+        id: commentId,
+        userId,
+        username,
+        nametag,
+        avatarUrl,
+        text,
+        createdAt: new Date().toISOString(),
+      },
+    });
   });
 }
