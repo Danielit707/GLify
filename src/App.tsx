@@ -421,7 +421,7 @@ function App({
     setCatalogSection(0);
   }, [activeNav, format, genre, query]);
 
-  // Sync user data when signed in
+  // Sync user data when signed in and on page load
   useEffect(() => {
     if (!user) return;
     const syncUser = async () => {
@@ -438,6 +438,24 @@ function App({
     };
     syncUser();
   }, [user]);
+
+  // Re-sync on page load/refresh
+  useEffect(() => {
+    const syncOnLoad = async () => {
+      if (!user) return;
+      try {
+        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+        const token = await getToken();
+        await fetch(`${apiBase}/api/users/sync`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (error) {
+        console.error("Failed to sync user on load:", error);
+      }
+    };
+    syncOnLoad();
+  }, []);
 
   useEffect(() => {
     if (activeNav !== "Communities") return;
@@ -663,7 +681,7 @@ function App({
       }
 
       // Fetch communities for this work
-      const communityResponse = await fetch(`${apiBase}/api/communities?filter=work`, {
+      const communityResponse = await fetch(`${apiBase}/api/communities?filter=work&workId=${work.id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (communityResponse.ok) {
