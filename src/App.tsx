@@ -1018,10 +1018,10 @@ function App({
         {activeNav === "Discover" && (
         <section className="hero-section">
           <div className="hero-copy">
-            <span className="eyebrow"><Sparkles size={14} /> A little corner of the internet, just for us</span>
+            <span className="eyebrow"><Sparkles size={14} /> The yuricorner of the internet</span>
             <h1>Find your kind<br />of <span>love story.</span></h1>
             <p className="hero-description">
-              Manga, manhwa, novels, and series — find the stories that feel like yours, and the people who love them too.
+              Manga, manhwa, novels, series and more. find the stories that feel like yours, and the people who love them too.
             </p>
             <button className="hero-cta" type="button" onClick={() => chooseNav("For You")}>
               Find your next favorite <ArrowRight size={17} />
