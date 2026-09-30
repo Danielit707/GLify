@@ -2,7 +2,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { FastifyInstance } from "fastify";
-import { moderateContent } from "../moderation.js";
+import { moderateContent, reviewRelevance } from "../moderation.js";
 
 type WorkFormat = "Manga" | "Manhwa" | "Light novel" | "Live action" | "Anime" | "Webtoon";
 
@@ -193,11 +193,19 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
     }
 
     // Ensure work exists in database if it's from catalog
-    const workExists = await fastify.postgres`
-      SELECT id FROM works WHERE id = ${workId}
+    const workRows = await fastify.postgres`
+      SELECT title, description FROM works WHERE id = ${workId}
     `;
-    if (workExists.length === 0) {
+    if (workRows.length === 0) {
       return reply.code(404).send({ error: "Work not found" });
+    }
+    const relevance = await reviewRelevance({
+      subject: "opinion",
+      text,
+      context: `Work title: ${String(workRows[0].title)}\nWork description: ${String(workRows[0].description)}`,
+    });
+    if (!relevance.allowed) {
+      return reply.code(relevance.statusCode).send({ error: relevance.error });
     }
 
     // Sync user data (only update avatar, preserve custom username/nametag)
@@ -276,6 +284,19 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
     const moderation = await moderateContent({ text: text.trim() });
     if (!moderation.allowed) {
       return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
+
+    const workRows = await fastify.postgres`
+      SELECT title, description FROM works WHERE id = ${id}
+    `;
+    if (workRows.length === 0) return reply.code(404).send({ error: "Work not found" });
+    const relevance = await reviewRelevance({
+      subject: "opinion",
+      text: text.trim(),
+      context: `Work title: ${String(workRows[0].title)}\nWork description: ${String(workRows[0].description)}`,
+    });
+    if (!relevance.allowed) {
+      return reply.code(relevance.statusCode).send({ error: relevance.error });
     }
 
     try {

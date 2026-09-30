@@ -20,6 +20,7 @@ import { formats, genres, isWork, works, type Work } from "./catalog";
 import UserMatches from "./UserMatches";
 import UserSettings from "./UserSettings";
 import Ships from "./Ships";
+import mainArt from "../images/Main_art.jpg";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
 const CATALOG_SECTION_SIZE = 15;
@@ -131,7 +132,10 @@ function WorkCard({
         pending
       }
       title={accountStatus === "disabled" ? "Account favorites are not configured." : undefined}
-      onClick={() => onToggleFavorite(work.id)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggleFavorite(work.id);
+      }}
     >
       {saved ? <Check size={17} /> : <Bookmark size={17} />}
     </button>
@@ -169,6 +173,7 @@ function WorkCard({
                 type="button"
                 aria-label={`Sign in to mark ${work.title} watched or read`}
                 disabled={watchPending}
+                onClick={(event) => event.stopPropagation()}
               >
                 <Eye size={14} /> Mark watched / read
               </button>
@@ -180,7 +185,10 @@ function WorkCard({
               aria-label={`${watched ? "Remove" : "Mark"} ${work.title} ${watched ? "from" : "as"} watched or read`}
               aria-pressed={watched}
               disabled={accountStatus !== "signed-in" || watchPending}
-              onClick={() => onToggleWatched(work.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleWatched(work.id);
+              }}
             >
               {watched ? <Check size={14} /> : <Eye size={14} />}
               {watched ? "Watched / read" : "Mark watched / read"}
@@ -1033,17 +1041,8 @@ async function handleDeleteOpinion() {
               <p><strong>A softer space for GL fans.</strong><br />Come as you are; stay for the stories.</p>
             </div>
           </div>
-          <div className="hero-art" aria-label="Illustration of two women sharing a quiet moment" role="img">
-            <div className="art-orbit orbit-one" />
-            <div className="art-orbit orbit-two" />
-            <div className="art-sun" />
-            <div className="art-leaf leaf-one">✿</div>
-            <div className="art-leaf leaf-two">✿</div>
-            <div className="art-caption"><Heart size={13} fill="currentColor" /> Your story, your pace</div>
-            <div className="art-person person-back"><span className="person-hair" /><span className="person-face" /><span className="person-body" /></div>
-            <div className="art-person person-front"><span className="person-hair" /><span className="person-face" /><span className="person-body" /></div>
-            <div className="art-sparkle sparkle-one">✦</div>
-            <div className="art-sparkle sparkle-two">✧</div>
+          <div className="hero-art">
+            <img src={mainArt} alt="GLify community artwork" />
           </div>
           <div className="hero-bottom-note"><span /> GOOD STORIES. GOOD COMPANY. ALWAYS.</div>
         </section>

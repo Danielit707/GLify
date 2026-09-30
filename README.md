@@ -5,7 +5,7 @@
 [![CI](https://github.com/Danielit707/GLify/actions/workflows/ci.yml/badge.svg)](https://github.com/Danielit707/GLify/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-GLify is a community-first discovery platform for Girls' Love (GL) and Yuri media: manga, manhwa, light novels, live-action series, anime, and webtoons. It helps fans find their next favorite story, connect with like-minded readers, and take part in welcoming, series-specific communities.
+GLify is a community-first discovery platform for Girls' Love (GL) and Yuri media: manga, manhwa, light novels, live-action series, anime, and webtoons. It helps fans find their next favorite story, connect with like-minded readers, share opinions, and take part in welcoming, series-specific communities.
 
 ![GLify catalog showing searchable titles, format filters, and AniList-imported works](./images/catalog_showcase.png)
 
@@ -46,13 +46,20 @@ Communities are not yet implemented. Before opening them publicly, GLify needs
 community membership and moderation, reporting and spoiler controls, plus
 secure media storage and upload rules.
 
+## Community features and content review
+
+Members can create and join general or work-focused communities, chat with fellow fans, publish one opinion per work, and create, like, or favorite ships. Public profiles show eligible favorites, watched/read activity, posted opinions, and favorite ships.
+
+User submissions are screened server-side before publication. OpenAI moderation checks safety for community information, chat messages, ships, ship images, and opinions. A separate relevance review checks that communities fit GLify's yuri/sapphic focus, ship details and images describe the same pairing, and opinions relate to the work being reviewed. Configure `OPENAI_API_KEY` only in the API service environment.
+
 ## Technology Stack
 
 | Area | Choice | Responsibility |
 | --- | --- | --- |
 | Web app | React, TypeScript, Vite, CSS | Responsive browser UI and discovery experience |
 | Web hosting | Vercel | Global static hosting, preview deployments, and custom domain |
-| API | Node.js, TypeScript, Fastify | Application API and business logic |
+| API | Node.js, TypeScript, Fastify | Application API, moderation, and business logic |
+| Content review | OpenAI | Safety moderation and relevance checks for user submissions |
 | API hosting | Render | Web service for the TypeScript API |
 | Authentication | Clerk | Sign-in and account identity |
 | Relational data | Neon Postgres | Catalog, favorites, watched/read activity, and recommendation-sharing preference |

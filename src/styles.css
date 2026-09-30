@@ -81,9 +81,9 @@ button { color: inherit; }
 .avatar-stack span:nth-child(4) { background: #8d9c8b; }
 .community-proof p { margin: 0; color: #928a86; font-size: 10px; line-height: 1.65; }
 .community-proof strong { color: #514948; font-weight: 600; }
-.hero-art { width: 100%; height: 412px; position: relative; isolation: isolate; overflow: hidden; border-radius: 48% 48% 14px 14px; background: linear-gradient(145deg, #f2dfe0 0%, #f4d6d3 54%, #eed0cf 100%); }
-.hero-art::before { content: ""; position: absolute; z-index: -1; width: 320px; height: 320px; top: 37px; left: 50%; border: 1px solid rgba(255,255,255,.56); border-radius: 50%; transform: translateX(-50%); }
-.hero-art::after { content: ""; position: absolute; z-index: -1; width: 250px; height: 250px; right: -45px; bottom: -80px; border-radius: 50%; background: rgba(206, 148, 144, .19); }
+.hero-art { width: 100%; height: 412px; position: relative; overflow: hidden; border-radius: 48% 48% 14px 14px; }
+.hero-art img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center; }
+.hero-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--paper) 0%, rgba(251, 248, 244, .78) 17%, rgba(251, 248, 244, .18) 48%, transparent 72%); pointer-events: none; }
 .art-orbit { position: absolute; z-index: -1; top: 57px; left: 50%; border: 1px solid rgba(255,255,255,.4); border-radius: 50%; transform: translateX(-50%); }
 .orbit-one { width: 275px; height: 275px; }
 .orbit-two { width: 355px; height: 355px; top: 17px; }
@@ -348,6 +348,7 @@ button { color: inherit; }
 .ship-creator button:hover { color: var(--rose-dark); }
 .ship-card-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
 .ship-card-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 31px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 10px; font-weight: 600; cursor: pointer; }
+.ship-card-actions .save-button { position: static; width: auto; height: 31px; }
 .ship-card-actions button:hover { border-color: #d7a6b0; color: var(--rose); }
 .ship-card-actions .ship-delete-button { margin-left: auto; color: #a54d62; }
 .site-footer { min-height: 82px; display: flex; align-items: center; gap: 13px; }

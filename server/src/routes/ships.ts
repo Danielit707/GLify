@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { moderateContent } from "../moderation.js";
+import { moderateContent, reviewRelevance } from "../moderation.js";
 
 const CreateShipSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -98,6 +98,15 @@ export default async function shipRoutes(fastify: FastifyInstance): Promise<void
     const moderation = await moderateContent({ text: `${name}\n${characters}`, imageUrl: image });
     if (!moderation.allowed) {
       return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
+    const relevance = await reviewRelevance({
+      subject: "ship",
+      text: `Ship name: ${name}\nCharacters: ${characters}`,
+      context: "The name, characters, and image must describe the same romantic pairing.",
+      imageUrl: image,
+    });
+    if (!relevance.allowed) {
+      return reply.code(relevance.statusCode).send({ error: relevance.error });
     }
 
     await fastify.postgres`

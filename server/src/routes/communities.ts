@@ -11,7 +11,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { moderateContent } from "../moderation.js";
+import { moderateContent, reviewRelevance } from "../moderation.js";
 
 const CreateCommunitySchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -182,6 +182,21 @@ export default async function communityRoutes(
     const moderation = await moderateContent({ text: `${name}\n${description}`, imageUrl: image });
     if (!moderation.allowed) {
       return reply.code(moderation.statusCode).send({ error: moderation.error });
+    }
+
+    const relatedWorks = workIds && workIds.length > 0
+      ? await fastify.postgres`SELECT title FROM works WHERE id = ANY(${workIds})`
+      : [];
+    const relevance = await reviewRelevance({
+      subject: "community",
+      text: `Name: ${name}\nDescription: ${description}`,
+      context: isGeneral
+        ? "A general GLify community must focus on yuri, sapphic, or women-loving-women fiction and fandom."
+        : `This work community is for: ${relatedWorks.map((work) => String(work.title)).join(", ") || "the selected work"}.`,
+      imageUrl: image,
+    });
+    if (!relevance.allowed) {
+      return reply.code(relevance.statusCode).send({ error: relevance.error });
     }
 
     const communityId = randomUUID();
