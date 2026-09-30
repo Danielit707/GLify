@@ -387,15 +387,16 @@ export default async function communityRoutes(
 
     const rows = await fastify.postgres`
       SELECT
-        id,
-        user_id AS "userId",
-        username,
-        avatar_url AS "avatarUrl",
-        text,
-        created_at AS "createdAt"
-      FROM chat_messages
-      WHERE community_id = ${id}
-      ORDER BY created_at ASC
+        cm.id,
+        cm.user_id AS "userId",
+        COALESCE(u.nametag, u.username, cm.username) AS "username",
+        u.avatar_url AS "avatarUrl",
+        cm.text,
+        cm.created_at AS "createdAt"
+      FROM chat_messages cm
+      LEFT JOIN users u ON u.id = cm.user_id
+      WHERE cm.community_id = ${id}
+      ORDER BY cm.created_at ASC
       LIMIT 200
     `;
 
@@ -445,6 +446,13 @@ export default async function communityRoutes(
         avatar_url = EXCLUDED.avatar_url
     `;
 
+    // Fetch the user's current username/nametag from the database
+    const userRows = await fastify.postgres`
+      SELECT username, nametag FROM users WHERE id = ${userId} LIMIT 1
+    `;
+    const dbUsername = userRows.length > 0 ? (userRows[0].username ?? username) : username;
+    const dbNametag = userRows.length > 0 ? (userRows[0].nametag ?? dbUsername) : dbUsername;
+
     const body = request.body as { text?: string };
     const text = body.text?.trim();
     if (!text || text.length > 1000) {
@@ -464,14 +472,15 @@ export default async function communityRoutes(
     const messageId = randomUUID();
     await fastify.postgres`
       INSERT INTO chat_messages (id, community_id, user_id, username, avatar_url, text)
-      VALUES (${messageId}, ${id}, ${userId}, ${username}, ${avatarUrl}, ${text})
+      VALUES (${messageId}, ${id}, ${userId}, ${dbUsername}, ${avatarUrl}, ${text})
     `;
 
     return reply.code(201).send({
       message: {
         id: messageId,
         userId,
-        username,
+        username: dbUsername,
+        nametag: dbNametag,
         avatarUrl,
         text,
         createdAt: new Date().toISOString(),

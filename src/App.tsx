@@ -736,7 +736,10 @@ function App({
         });
         if (response.ok) {
           const payload = await response.json();
-          setChatMessages(payload.messages);
+          setChatMessages(payload.messages.map((m: any) => ({
+            ...m,
+            nametag: m.nametag || m.username || "Unknown",
+          })));
         }
       } catch {
         // Silently fail on poll errors
