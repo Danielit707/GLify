@@ -129,13 +129,12 @@ export default async function communityRoutes(
     try {
       params.push(userId);
       const result = await fastify.postgres.unsafe(
-        `UPDATE users SET ${updates.join(", ")} WHERE id = $${params.length} RETURNING id, username, nametag, avatar_url AS "avatarUrl"`,
+        `INSERT INTO users (id, username, nametag, avatar_url)
+         VALUES ($${params.length}, $${params.length - updates.length}, $${params.length - updates.length + 1}, NULL)
+         ON CONFLICT (id) DO UPDATE SET ${updates.join(", ")}
+         RETURNING id, username, nametag, avatar_url AS "avatarUrl"`,
         params
       );
-
-      if (result.length === 0) {
-        return reply.code(404).send({ error: "User not found" });
-      }
 
       const row = result[0];
       return {
