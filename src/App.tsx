@@ -334,6 +334,18 @@ function App({
   const [showSettings, setShowSettings] = useState(false);
   const [editingUsername, setEditingUsername] = useState("");
   const [editingNametag, setEditingNametag] = useState("");
+  const [selectedWork, setSelectedWork] = useState<Work | null>(null);
+  const [workComments, setWorkComments] = useState<Array<{
+    id: string;
+    userId: string;
+    text: string;
+    createdAt: string;
+    username: string;
+    nametag: string;
+    avatarUrl: string | null;
+  }>>([]);
+  const [workCommunities, setWorkCommunities] = useState<Community[]>([]);
+  const [newComment, setNewComment] = useState("");
   const [selectedMember, setSelectedMember] = useState<{
     userId: string;
     username: string;
@@ -631,6 +643,64 @@ function App({
     }
   }
 
+  async function openWorkDetail(work: Work) {
+    setSelectedWork(work);
+    setWorkComments([]);
+    setWorkCommunities([]);
+    setNewComment("");
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+
+      // Fetch comments
+      const commentResponse = await fetch(`${apiBase}/api/works/${work.id}/comments`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (commentResponse.ok) {
+        const commentPayload = await commentResponse.json();
+        setWorkComments(commentPayload.comments);
+      }
+
+      // Fetch communities for this work
+      const communityResponse = await fetch(`${apiBase}/api/communities?filter=work`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (communityResponse.ok) {
+        const communityPayload = await communityResponse.json();
+        setWorkCommunities(communityPayload.communities);
+      }
+    } catch (error) {
+      console.error("Failed to open work detail:", error);
+    }
+  }
+
+  async function submitComment() {
+    if (!newComment.trim() || !selectedWork) return;
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/works/${selectedWork.id}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: newComment.trim() }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add comment");
+      }
+      const payload = await response.json();
+      setWorkComments((prev) => [payload.comment, ...prev]);
+      setNewComment("");
+    } catch (error) {
+      console.error("Failed to add comment:", error);
+    }
+  }
+
   async function viewMemberProfile(userId: string) {
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
@@ -785,9 +855,23 @@ function App({
             type="button"
             className="settings-button"
             aria-label="Settings"
-            onClick={() => {
-              setEditingUsername(user?.username ?? "");
-              setEditingNametag(user?.username ?? "");
+            onClick={async () => {
+              try {
+                const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+                const token = await getToken();
+                const response = await fetch(`${apiBase}/api/users/${user?.id}`, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                });
+                if (response.ok) {
+                  const payload = await response.json();
+                  setEditingUsername(payload.user.username ?? "");
+                  setEditingNametag(payload.user.nametag ?? payload.user.username ?? "");
+                }
+              } catch {
+                // Fallback to Clerk data
+                setEditingUsername(user?.username ?? "");
+                setEditingNametag(user?.username ?? "");
+              }
               setShowSettings(true);
             }}
           >
@@ -915,17 +999,18 @@ function App({
           {visibleWorks.length > 0 ? (
             <div className="work-grid" ref={catalogGridRef}>
               {displayedWorks.map((work) => (
-                <WorkCard
-                  key={work.id}
-                  work={work}
-                  saved={savedIds.includes(work.id)}
-                  accountStatus={accountStatus}
-                  pending={favoritesLoading || pendingFavoriteId === work.id}
-                  watched={watchedIds.includes(work.id)}
-                  watchPending={favoritesLoading || pendingWatchedId === work.id}
-                  onToggleFavorite={onToggleFavorite}
-                  onToggleWatched={onToggleWatched}
-                />
+                <div key={work.id} className="work-card-clickable" onClick={() => openWorkDetail(work)}>
+                  <WorkCard
+                    work={work}
+                    saved={savedIds.includes(work.id)}
+                    accountStatus={accountStatus}
+                    pending={favoritesLoading || pendingFavoriteId === work.id}
+                    watched={watchedIds.includes(work.id)}
+                    watchPending={favoritesLoading || pendingWatchedId === work.id}
+                    onToggleFavorite={onToggleFavorite}
+                    onToggleWatched={onToggleWatched}
+                  />
+                </div>
               ))}
             </div>
           ) : (
@@ -1264,6 +1349,122 @@ function App({
                 >
                   Send
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedWork && (
+          <div className="chat-overlay" onClick={() => setSelectedWork(null)}>
+            <div className="work-detail-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="chat-header">
+                <h3>{selectedWork.title}</h3>
+                <button type="button" className="close-chat" onClick={() => setSelectedWork(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="work-detail-body">
+                <div className="work-detail-main">
+                  <div className="work-detail-image">
+                    <img src={selectedWork.image} alt={selectedWork.title} />
+                  </div>
+                  <div className="work-detail-info">
+                    <span className="format-pill">{selectedWork.format}</span>
+                    <h4>{selectedWork.title}</h4>
+                    <p className="work-creator">{selectedWork.creator} · {selectedWork.chapters}</p>
+                    <p className="work-description">{selectedWork.description}</p>
+                    <div className="tag-row">
+                      {selectedWork.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const groupId = getWorkGroupId(selectedWork);
+                  const relatedWorks = catalogWorks.filter((w) => getWorkGroupId(w) === groupId && w.id !== selectedWork.id);
+                  if (relatedWorks.length === 0) return null;
+                  return (
+                    <div className="work-detail-section">
+                      <h4>Other formats</h4>
+                      <div className="related-works">
+                        {relatedWorks.map((work) => (
+                          <button
+                            type="button"
+                            className="related-work"
+                            key={work.id}
+                            onClick={() => openWorkDetail(work)}
+                          >
+                            <img src={work.image} alt={work.title} />
+                            <span>{work.format}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {workCommunities.length > 0 && (
+                  <div className="work-detail-section">
+                    <h4>Communities</h4>
+                    <div className="related-works">
+                      {workCommunities.map((community) => (
+                        <button
+                          type="button"
+                          className="related-work"
+                          key={community.id}
+                          onClick={() => openCommunityChat(community)}
+                        >
+                          {community.image && <img src={community.image} alt={community.name} />}
+                          <span>{community.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="work-detail-section">
+                  <h4>Comments</h4>
+                  <div className="comment-form">
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          submitComment();
+                        }
+                      }}
+                      placeholder="Share your thoughts..."
+                      maxLength={1000}
+                    />
+                    <button
+                      type="button"
+                      onClick={submitComment}
+                      disabled={!newComment.trim()}
+                    >
+                      Post
+                    </button>
+                  </div>
+                  <div className="comment-list">
+                    {workComments.length === 0 ? (
+                      <p className="chat-empty">No comments yet. Be the first!</p>
+                    ) : (
+                      workComments.map((comment) => (
+                        <div className="comment-item" key={comment.id}>
+                          <img
+                            className="comment-avatar"
+                            src={comment.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.nametag)}
+                            alt={comment.nametag}
+                          />
+                          <div className="comment-content">
+                            <span className="comment-author">{comment.nametag}</span>
+                            <p>{comment.text}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

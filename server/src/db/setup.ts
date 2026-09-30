@@ -235,6 +235,19 @@ async function setupDatabase(): Promise<void> {
       `;
       await transaction`ALTER TABLE users ADD COLUMN IF NOT EXISTS nametag text`;
       await transaction`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text`;
+      await transaction`
+        CREATE TABLE IF NOT EXISTS work_comments (
+          id text PRIMARY KEY,
+          work_id text NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+          user_id text NOT NULL,
+          text text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
+      await transaction`
+        ALTER TABLE work_comments
+        ADD CONSTRAINT IF NOT EXISTS work_comments_unique UNIQUE (work_id, user_id)
+      `;
 
       for (const work of seedWorks) {
         await transaction`

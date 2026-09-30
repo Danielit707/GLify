@@ -235,6 +235,30 @@ button { color: inherit; }
 .profile-work span { color: var(--ink); font-size: 10px; }
 .similar-image { width: 100%; height: 100px; overflow: hidden; border-radius: 6px; margin-bottom: 8px; background: #f5eeea; }
 .similar-image img { width: 100%; height: 100%; object-fit: cover; }
+.work-card-clickable { cursor: pointer; }
+.work-detail-panel { width: min(640px, 92vw); max-height: min(700px, 85vh); display: flex; flex-direction: column; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.work-detail-body { flex: 1; overflow-y: auto; padding: 16px; }
+.work-detail-main { display: flex; gap: 14px; margin-bottom: 16px; }
+.work-detail-image { width: 120px; height: 160px; overflow: hidden; border-radius: 8px; background: #f5eeea; flex-shrink: 0; }
+.work-detail-image img { width: 100%; height: 100%; object-fit: cover; }
+.work-detail-info { flex: 1; }
+.work-detail-info h4 { margin: 6px 0 4px; font: 600 16px "Playfair Display", Georgia, serif; }
+.work-detail-section { margin-top: 16px; }
+.work-detail-section h4 { margin: 0 0 8px; font: 600 13px "Playfair Display", Georgia, serif; }
+.related-works { display: flex; gap: 8px; flex-wrap: wrap; }
+.related-work { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border: 1px solid #eee8e2; border-radius: 8px; background: #fff; cursor: pointer; }
+.related-work img { width: 48px; height: 64px; object-fit: cover; border-radius: 4px; }
+.related-work span { color: var(--ink); font-size: 9px; }
+.comment-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.comment-form input { flex: 1; padding: 8px 10px; border: 1px solid #e9e2dd; border-radius: 6px; font-size: 11px; font-family: inherit; }
+.comment-form button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--rose); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.comment-form button:disabled { opacity: .5; cursor: not-allowed; }
+.comment-list { display: flex; flex-direction: column; gap: 10px; }
+.comment-item { display: flex; gap: 8px; }
+.comment-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.comment-content { flex: 1; }
+.comment-author { display: block; margin-bottom: 2px; color: var(--rose); font-size: 10px; font-weight: 600; }
+.comment-content p { margin: 0; color: var(--ink); font-size: 11px; line-height: 1.5; }
 .chat-header-info { display: flex; align-items: center; gap: 10px; }
 .chat-community-image { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
 .chat-member-count { color: var(--muted); font-size: 10px; }
