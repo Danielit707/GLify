@@ -147,15 +147,28 @@ export default async function communityRoutes(
       return reply.code(401).send({ error: "Authentication required" });
     }
 
-    // Decode JWT payload to get user ID (Clerk tokens are JWTs)
+    // Decode JWT payload to get user ID, username, and avatar
     let userId = "unknown-user";
+    let username = "Unknown";
+    let avatarUrl: string | null = null;
     try {
       const payload = clerkToken.split(".")[1];
       const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
       userId = decoded.sub || decoded.user_id || "unknown-user";
+      username = decoded.name || decoded.username || "Unknown";
+      avatarUrl = decoded.picture || decoded.avatar_url || null;
     } catch {
       return reply.code(401).send({ error: "Invalid token" });
     }
+
+    // Sync user data
+    await fastify.postgres`
+      INSERT INTO users (id, username, avatar_url)
+      VALUES (${userId}, ${username}, ${avatarUrl})
+      ON CONFLICT (id) DO UPDATE SET
+        username = EXCLUDED.username,
+        avatar_url = EXCLUDED.avatar_url
+    `;
 
     const parsed = CreateCommunitySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -247,17 +260,30 @@ export default async function communityRoutes(
       return reply.code(401).send({ error: "Authentication required" });
     }
 
-    // Decode JWT payload to get user ID
+    // Decode JWT payload to get user ID, username, and avatar
     let userId = "unknown-user";
+    let username = "Unknown";
+    let avatarUrl: string | null = null;
     try {
       const payload = clerkToken.split(".")[1];
       const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
       userId = decoded.sub || decoded.user_id || "unknown-user";
+      username = decoded.name || decoded.username || "Unknown";
+      avatarUrl = decoded.picture || decoded.avatar_url || null;
     } catch {
       return reply.code(401).send({ error: "Invalid token" });
     }
 
     try {
+      // Sync user data
+      await fastify.postgres`
+        INSERT INTO users (id, username, avatar_url)
+        VALUES (${userId}, ${username}, ${avatarUrl})
+        ON CONFLICT (id) DO UPDATE SET
+          username = EXCLUDED.username,
+          avatar_url = EXCLUDED.avatar_url
+      `;
+
       // Add user as member (only if not already a member)
       const result = await fastify.postgres`
         WITH inserted AS (
@@ -412,6 +438,15 @@ export default async function communityRoutes(
     } catch {
       return reply.code(401).send({ error: "Invalid token" });
     }
+
+    // Sync user data
+    await fastify.postgres`
+      INSERT INTO users (id, username, avatar_url)
+      VALUES (${userId}, ${username}, ${avatarUrl})
+      ON CONFLICT (id) DO UPDATE SET
+        username = EXCLUDED.username,
+        avatar_url = EXCLUDED.avatar_url
+    `;
 
     const body = request.body as { text?: string };
     const text = body.text?.trim();
