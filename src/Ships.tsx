@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Heart, Plus, Sparkles, Star, UsersRound } from "lucide-react";
+import { Heart, Plus, Sparkles, Star, Trash2, UsersRound } from "lucide-react";
 import { useAuth } from "@clerk/react";
 
 interface Ship {
@@ -9,12 +9,23 @@ interface Ship {
   characters: string;
   createdBy: string;
   createdAt: string;
+  creator: {
+    username: string;
+    nametag: string;
+    avatarUrl: string | null;
+  };
   likeCount: number;
   isLiked: boolean;
   isFavorited: boolean;
 }
 
-export default function Ships({ accountStatus }: { accountStatus: string }) {
+export default function Ships({
+  accountStatus,
+  onSelectUser,
+}: {
+  accountStatus: string;
+  onSelectUser: (userId: string) => void;
+}) {
   const [ships, setShips] = useState<Ship[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -22,7 +33,7 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
   const [image, setImage] = useState("");
   const [characters, setCharacters] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
 
   const fetchShips = async () => {
     try {
@@ -122,6 +133,21 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
     }
   }
 
+  async function deleteShip(shipId: string) {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/ships/${shipId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to delete ship");
+      setShips((current) => current.filter((ship) => ship.id !== shipId));
+    } catch (error) {
+      console.error("Failed to delete ship:", error);
+    }
+  }
+
   if (loading) return <p className="favorites-prompt">Loading ships...</p>;
 
   return (
@@ -180,6 +206,12 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
               <div className="ship-card-info">
                 <h3>{ship.name}</h3>
                 <p>{ship.characters}</p>
+                <p className="ship-creator">
+                  Created by: {" "}
+                  <button type="button" onClick={() => onSelectUser(ship.createdBy)}>
+                    {ship.creator.username}
+                  </button>
+                </p>
                 <div className="ship-card-actions">
                   <button
                     type="button"
@@ -196,6 +228,16 @@ export default function Ships({ accountStatus }: { accountStatus: string }) {
                   >
                     <Star size={14} fill={ship.isFavorited ? "currentColor" : "none"} />
                   </button>
+                  {userId === ship.createdBy && (
+                    <button
+                      type="button"
+                      className="ship-delete-button"
+                      onClick={() => void deleteShip(ship.id)}
+                      aria-label={`Delete ${ship.name}`}
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  )}
                 </div>
               </div>
             </article>

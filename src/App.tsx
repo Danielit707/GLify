@@ -1854,7 +1854,7 @@ async function handleDeleteOpinion() {
 
         {activeNav === "Ships" && (
           <section className="content-width" id="ships" style={{ padding: "40px 0 76px" }}>
-            <Ships accountStatus={accountStatus} />
+            <Ships accountStatus={accountStatus} onSelectUser={viewMemberProfile} />
           </section>
         )}
       </main>

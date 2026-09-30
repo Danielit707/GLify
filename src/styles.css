@@ -343,9 +343,13 @@ button { color: inherit; }
 .ship-card-info { display: flex; flex: 1; flex-direction: column; gap: 7px; padding: 14px; }
 .ship-card-info h3 { margin: 0; font: 600 17px "Playfair Display", Georgia, serif; line-height: 1.2; }
 .ship-card-info p { min-height: 2.8em; margin: 0; color: #796b67; font-size: 11px; line-height: 1.4; }
+.ship-card-info .ship-creator { min-height: 0; color: var(--muted); font-size: 9px; }
+.ship-creator button { padding: 0; border: 0; background: none; color: var(--rose); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.ship-creator button:hover { color: var(--rose-dark); }
 .ship-card-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
 .ship-card-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 31px; padding: 6px 10px; border: 1px solid #eadfda; border-radius: 5px; background: #fff; color: #796b67; font-size: 10px; font-weight: 600; cursor: pointer; }
 .ship-card-actions button:hover { border-color: #d7a6b0; color: var(--rose); }
+.ship-card-actions .ship-delete-button { margin-left: auto; color: #a54d62; }
 .site-footer { min-height: 82px; display: flex; align-items: center; gap: 13px; }
 .footer-brand { gap: 7px; font-size: 19px; }
 .footer-brand .brand-mark { width: 25px; height: 25px; border-radius: 8px; }

@@ -134,6 +134,26 @@ export default async function shipRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
+  /** Delete a ship. Only its creator can delete it. */
+  fastify.delete("/api/ships/:shipId", async (request, reply) => {
+    const userId = getUserIdFromRequest(request);
+    if (!userId) {
+      return reply.code(401).send({ error: "Authentication required." });
+    }
+
+    const { shipId } = request.params as { shipId: string };
+    const [ship] = await fastify.postgres`
+      SELECT created_by AS "createdBy" FROM ships WHERE id = ${shipId}
+    `;
+    if (!ship) return reply.code(404).send({ error: "Ship not found." });
+    if (String(ship.createdBy) !== userId) {
+      return reply.code(403).send({ error: "Only the ship creator can delete it." });
+    }
+
+    await fastify.postgres`DELETE FROM ships WHERE id = ${shipId}`;
+    return reply.code(204).send();
+  });
+
   /**
    * POST /api/ships/:shipId/like
    *
