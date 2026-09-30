@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { ClerkLoaded, Show, SignInButton, SignUpButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { formats, genres, isWork, works, type Work } from "./catalog";
+import UserMatches from "./UserMatches";
+import UserSettings from "./UserSettings";
+import Ships from "./Ships";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
 const CATALOG_SECTION_SIZE = 15;
@@ -437,6 +440,7 @@ function App({
   const [selectedWork, setSelectedWork] = useState<Work | null>(null);
   const [workComments, setWorkComments] = useState<Array<{
     id: string;
+    workId: string;
     userId: string;
     text: string;
     createdAt: string;
@@ -797,7 +801,7 @@ function App({
       });
       if (commentResponse.ok) {
         const commentPayload = await commentResponse.json();
-        setWorkComments(commentPayload.comments);
+        setWorkComments(commentPayload.comments.map((c: any) => ({ ...c, workId: work.id })));
       }
 
       // Fetch communities for this work
@@ -928,7 +932,12 @@ function App({
   const visibleWorks = activeNav === "My list" && accountStatus === "signed-in"
     ? favoritesLoading
       ? []
-      : filteredWorks.filter((work) => savedIds.includes(work.id))
+      : filteredWorks.filter(
+          (work) =>
+            savedIds.includes(work.id) ||
+            watchedIds.includes(work.id) ||
+            workComments.some((c) => c.workId === work.id)
+        )
     : activeNav === "My list"
       ? []
       : filteredWorks;
@@ -977,6 +986,7 @@ function App({
             { name: "Communities", icon: <UsersRound size={16} /> },
             { name: "My list", icon: <Bookmark size={16} /> },
             { name: "Users", icon: <UsersRound size={16} /> },
+            { name: "Ships", icon: <Heart size={16} /> },
           ].map((item) => (
             <button
               className={`nav-link${activeNav === item.name ? " is-active" : ""}`}
@@ -1561,113 +1571,83 @@ function App({
                 )}
 
                 <div className="work-detail-section">
-                  <h4>Comments</h4>
-                  <div className="comment-form">
-                    <input
-                      type="text"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          submitComment();
-                        }
-                      }}
-                      placeholder="Share your thoughts..."
-                      maxLength={1000}
-                    />
-                    <button
-                      type="button"
-                      onClick={submitComment}
-                      disabled={!newComment.trim()}
-                    >
-                      Post
-                    </button>
-                  </div>
-                  <div className="comment-list">
-                    {workComments.length === 0 ? (
-                      <p className="chat-empty">No comments yet. Be the first!</p>
-                    ) : (
-                      workComments.map((comment) => (
-                        <div className="comment-item" key={comment.id}>
-                          <img
-                            className="comment-avatar"
-                            src={comment.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.nametag)}
-                            alt={comment.nametag}
-                          />
-                          <div className="comment-content">
-                            <span className="comment-author">{comment.nametag}</span>
-                            <p>{comment.text}</p>
+                  <h4>Opinions</h4>
+                  {(() => {
+                    const currentUserId = user?.id;
+                    const userComment = workComments.find((c) => c.userId === currentUserId);
+                    const otherComments = workComments.filter((c) => c.userId !== currentUserId);
+
+                    return (
+                      <>
+                        {userComment && (
+                          <div className="comment-form">
+                            <label className="your-opinion-label">Your opinion:</label>
+                            <div className="your-opinion-display">
+                              <p>{userComment.text}</p>
+                            </div>
                           </div>
+                        )}
+                        <div className="comment-form">
+                          <input
+                            type="text"
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                submitComment();
+                              }
+                            }}
+                            placeholder={userComment ? "Update your opinion..." : "Share your thoughts..."}
+                            maxLength={1000}
+                          />
+                          <button
+                            type="button"
+                            onClick={submitComment}
+                            disabled={!newComment.trim()}
+                          >
+                            {userComment ? "Update" : "Post"}
+                          </button>
                         </div>
-                      ))
-                    )}
-                  </div>
+                        <div className="comment-list">
+                          {otherComments.length === 0 && !userComment ? (
+                            <p className="chat-empty">No opinions yet. Be the first!</p>
+                          ) : (
+                            otherComments.map((comment) => (
+                              <div className="comment-item" key={comment.id}>
+                                <img
+                                  className="comment-avatar"
+                                  src={comment.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.nametag)}
+                                  alt={comment.nametag}
+                                />
+                                <div className="comment-content">
+                                  <span className="comment-author">{comment.nametag}</span>
+                                  <p>{comment.text}</p>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {showSettings && (
-          <div className="chat-overlay" onClick={() => setShowSettings(false)}>
-            <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-              <div className="chat-header">
-                <h3>Settings</h3>
-                <button type="button" className="close-chat" onClick={() => setShowSettings(false)}>
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="settings-body">
-                <div className="settings-section">
-                  <h4>Profile</h4>
-                  <label>
-                    <span>Username (unique)</span>
-                    <input
-                      type="text"
-                      value={editingUsername}
-                      onChange={(e) => setEditingUsername(e.target.value)}
-                      placeholder="Username"
-                      maxLength={30}
-                    />
-                  </label>
-                  <label>
-                    <span>Nametag (shown in chats)</span>
-                    <input
-                      type="text"
-                      value={editingNametag}
-                      onChange={(e) => setEditingNametag(e.target.value)}
-                      placeholder="Nametag"
-                      maxLength={30}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="submit-community"
-                    onClick={updateProfile}
-                    disabled={!editingUsername.trim() || !editingNametag.trim()}
-                  >
-                    Save profile
-                  </button>
-                </div>
-                <div className="settings-section">
-                  <h4>Privacy</h4>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={shareActivity}
-                      disabled={participationPending}
-                      onChange={(event) => onSetRecommendationParticipation(event.target.checked)}
-                    />
-                    <span>
-                      Let my favorites and watched/read list help recommend stories to similar members.
-                      You can change this any time; it does not affect your own recommendations.
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <UserSettings
+          showSettings={showSettings}
+          editingUsername={editingUsername}
+          editingNametag={editingNametag}
+          shareActivity={shareActivity}
+          participationPending={participationPending}
+          onClose={() => setShowSettings(false)}
+          onUsernameChange={setEditingUsername}
+          onNametagChange={setEditingNametag}
+          onSaveProfile={updateProfile}
+          onSetRecommendationParticipation={onSetRecommendationParticipation}
+        />
 
         {selectedMember && (
           <div className="chat-overlay" onClick={() => setSelectedMember(null)}>
@@ -1738,11 +1718,13 @@ function App({
                 <p>Members with similar interests, ranked by shared watched, favorites, and communities.</p>
               </div>
             </div>
-            <UserMatches
-              accountStatus={accountStatus}
-              savedIds={savedIds}
-              watchedIds={watchedIds}
-            />
+            <UserMatches accountStatus={accountStatus} />
+          </section>
+        )}
+
+        {activeNav === "Ships" && (
+          <section className="content-width" id="ships" style={{ padding: "40px 0 76px" }}>
+            <Ships />
           </section>
         )}
       </main>
