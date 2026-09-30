@@ -41,8 +41,6 @@ export default async function userRoutes(
       INSERT INTO users (id, username, nametag, avatar_url)
       VALUES (${userId}, ${username}, ${nametag}, ${avatarUrl})
       ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
-        nametag = EXCLUDED.nametag,
         avatar_url = EXCLUDED.avatar_url
     `;
 
