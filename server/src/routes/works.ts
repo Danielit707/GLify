@@ -240,4 +240,103 @@ export default async function workRoutes(fastify: FastifyInstance): Promise<void
       },
     });
   });
+
+  /**
+   * PUT /api/works/:id/comments
+   * Update user's opinion about the work
+   */
+  fastify.put("/api/works/:id/comments", async (request, reply) => {
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    const { id } = request.params as { id: string };
+    const { text } = request.body as { text?: string };
+
+    if (!text || text.trim().length === 0) {
+      return reply.code(400).send({ error: "Comment text cannot be empty" });
+    }
+
+    try {
+      const [updated] = await fastify.postgres`
+        UPDATE work_comments
+        SET text = ${text.trim()}
+        WHERE work_id = ${id} AND user_id = ${userId}
+        RETURNING id, user_id AS "userId", text, created_at AS "createdAt"
+      `;
+
+      if (!updated) {
+        return reply.code(404).send({ error: "Comment not found or not owned by user" });
+      }
+
+      const [userRow] = await fastify.postgres`
+        SELECT
+          COALESCE(username, 'Unknown') AS username,
+          COALESCE(nametag, username, 'Unknown') AS nametag,
+          avatar_url AS "avatarUrl"
+        FROM users
+        WHERE id = ${userId}
+        LIMIT 1
+      `;
+
+      return {
+        comment: {
+          id: String(updated.id),
+          userId: String(updated.userId),
+          text: String(updated.text),
+          createdAt: String(updated.createdAt),
+          username: userRow ? String(userRow.username) : "Unknown",
+          nametag: userRow ? String(userRow.nametag) : "Unknown",
+          avatarUrl: userRow?.avatarUrl ? String(userRow.avatarUrl) : null,
+        },
+      };
+    } catch (error) {
+      request.log.error({ err: error }, "Failed to update comment");
+      return reply.code(500).send({ error: "Failed to update comment" });
+    }
+  });
+
+  /**
+   * DELETE /api/works/:id/comments
+   * Delete user's opinion about a work
+   */
+  fastify.delete("/api/works/:id/comments", async (request, reply) => {
+    const clerkToken = request.headers["authorization"]?.replace("Bearer ", "");
+    if (!clerkToken) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    let userId = "unknown-user";
+    try {
+      const payload = clerkToken.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString());
+      userId = decoded.sub || decoded.user_id || "unknown-user";
+    } catch {
+      return reply.code(401).send({ error: "Invalid token" });
+    }
+
+    const { id } = request.params as { id: string };
+
+    try {
+      await fastify.postgres`
+        DELETE FROM work_comments
+        WHERE work_id = ${id} AND user_id = ${userId}
+      `;
+
+      return { success: true };
+    } catch (error) {
+      request.log.error({ err: error }, "Failed to delete comment");
+      return reply.code(500).send({ error: "Failed to delete comment" });
+    }
+  });
 }

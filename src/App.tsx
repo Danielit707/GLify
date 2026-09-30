@@ -290,6 +290,7 @@ function PersonalizedRecommendations({
 
 
 function App({
+  
   accountStatus = "disabled",
   savedIds = [],
   watchedIds = [],
@@ -376,9 +377,43 @@ function App({
     opinions: Array<{ workId: string; workTitle: string; text: string; createdAt: string }>;
     favoriteShips: Array<{ id: string; name: string; characters: string; image: string }>;
   } | null>(null);
+
+  // My list filters state
+  const [myListFilter, setMyListFilter] = useState<"all" | "favorites" | "watched" | "commented">("all");
+  const [commentedWorkIds, setCommentedWorkIds] = useState<string[]>([]);
+
+  // Work opinion edit state
+  const [editingOpinion, setEditingOpinion] = useState(false);
+  const [editedOpinionText, setEditedOpinionText] = useState("");
+
   const [communityView, setCommunityView] = useState<"my" | "all">("my");
   const { getToken } = useAuth();
   const { user } = useUser();
+
+  useEffect(() => {
+  if (accountStatus !== "signed-in" || !user) return;
+  const fetchUserComments = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+      const token = await getToken();
+      const response = await fetch(`${apiBase}/api/users/${user.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        const comments = payload.user.comments || [];
+        const ids = comments.map((c: { workTitle: string }) => {
+          const match = catalogWorks.find((w) => w.title === c.workTitle);
+          return match ? match.id : null;
+        }).filter(Boolean) as string[];
+        setCommentedWorkIds(ids);
+      }
+    } catch (error) {
+      console.error("Failed to load user comment IDs:", error);
+    }
+  };
+  fetchUserComments();
+}, [accountStatus, user, catalogWorks]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -765,6 +800,49 @@ function App({
     }
   }
 
+  async function handleUpdateOpinion() {
+  if (!editedOpinionText.trim() || !selectedWork) return;
+
+  try {
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+    const token = await getToken();
+    const response = await fetch(`${apiBase}/api/works/${selectedWork.id}/comments`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ text: editedOpinionText.trim() }),
+    });
+    if (!response.ok) throw new Error("Failed to update opinion");
+    const payload = await response.json();
+    setWorkComments((prev) =>
+      prev.map((c) => (c.userId === user?.id ? payload.comment : c))
+    );
+    setEditingOpinion(false);
+  } catch (error) {
+    console.error("Failed to update opinion:", error);
+  }
+}
+
+async function handleDeleteOpinion() {
+  if (!selectedWork) return;
+
+  try {
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
+    const token = await getToken();
+    const response = await fetch(`${apiBase}/api/works/${selectedWork.id}/comments`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Failed to delete opinion");
+    setWorkComments((prev) => prev.filter((c) => c.userId !== user?.id));
+    setEditingOpinion(false);
+  } catch (error) {
+    console.error("Failed to delete opinion:", error);
+  }
+}
+
   async function viewMemberProfile(userId: string) {
     try {
       const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
@@ -851,18 +929,21 @@ function App({
     }
   }
 
-  const visibleWorks = activeNav === "My list" && accountStatus === "signed-in"
-    ? favoritesLoading
-      ? []
-      : filteredWorks.filter(
-          (work) =>
-            savedIds.includes(work.id) ||
-            watchedIds.includes(work.id) ||
-            workComments.some((c) => c.workId === work.id)
-        )
-    : activeNav === "My list"
-      ? []
-      : filteredWorks;
+  const visibleWorks = useMemo(() => {
+  if (activeNav !== "My list") return filteredWorks;
+  if (accountStatus !== "signed-in" || favoritesLoading) return [];
+
+  return filteredWorks.filter((work) => {
+    const isSaved = savedIds.includes(work.id);
+    const isWatched = watchedIds.includes(work.id);
+    const isCommented = commentedWorkIds.includes(work.id);
+
+    if (myListFilter === "favorites") return isSaved;
+    if (myListFilter === "watched") return isWatched;
+    if (myListFilter === "commented") return isCommented;
+    return isSaved || isWatched || isCommented;
+  });
+}, [activeNav, accountStatus, favoritesLoading, filteredWorks, savedIds, watchedIds, commentedWorkIds, myListFilter]);
   const catalogSectionCount = Math.ceil(visibleWorks.length / CATALOG_SECTION_SIZE);
   const displayedWorks = visibleWorks.slice(
     catalogSection * CATALOG_SECTION_SIZE,
@@ -1034,6 +1115,38 @@ function App({
           )}
 
           <div className="discovery-tools">
+            {activeNav === "My list" && (
+  <div className="community-filters" style={{ marginBottom: "16px" }}>
+    <button
+      type="button"
+      className={`filter-button${myListFilter === "all" ? " is-active" : ""}`}
+      onClick={() => setMyListFilter("all")}
+    >
+      All
+    </button>
+    <button
+      type="button"
+      className={`filter-button${myListFilter === "favorites" ? " is-active" : ""}`}
+      onClick={() => setMyListFilter("favorites")}
+    >
+      Favorites
+    </button>
+    <button
+      type="button"
+      className={`filter-button${myListFilter === "watched" ? " is-active" : ""}`}
+      onClick={() => setMyListFilter("watched")}
+    >
+      Watched
+    </button>
+    <button
+      type="button"
+      className={`filter-button${myListFilter === "commented" ? " is-active" : ""}`}
+      onClick={() => setMyListFilter("commented")}
+    >
+      Commented
+    </button>
+  </div>
+)}
             <label className="search-box">
               <Search size={17} aria-hidden="true" />
               <input
@@ -1497,32 +1610,84 @@ function App({
                   <h4>Opinions</h4>
                   {(() => {
                     const currentUserId = user?.id;
-                    const userComment = workComments.find((c) => c.userId === currentUserId);
+                    const currentUserComment = workComments.find((c) => c.userId === currentUserId);
 
                     return (
                       <>
                         {accountStatus === "signed-in" ? (
-                          <div className="comment-form">
-                            <input
-                              type="text"
-                              value={newComment}
-                              onChange={(e) => setNewComment(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  submitComment();
-                                }
-                              }}
-                              placeholder={userComment ? "Update your opinion..." : "Share your thoughts on this story..."}
-                              maxLength={1000}
-                            />
-                            <button
-                              type="button"
-                              onClick={submitComment}
-                              disabled={!newComment.trim()}
-                            >
-                              {userComment ? "Update" : "Post"}
-                            </button>
-                          </div>
+                          currentUserComment ? (
+                            <div className="your-review-section" style={{ marginBottom: "16px" }}>
+                              <span className="your-review-label" style={{ fontWeight: 600, display: "block", marginBottom: "8px" }}>
+                                Your opinion:
+                              </span>
+                              {editingOpinion ? (
+                                <div className="comment-form">
+                                  <input
+                                    type="text"
+                                    value={editedOpinionText}
+                                    onChange={(e) => setEditedOpinionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleUpdateOpinion();
+                                    }}
+                                    maxLength={1000}
+                                  />
+                                  <button type="button" onClick={handleUpdateOpinion}>
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cancel-community"
+                                    onClick={() => setEditingOpinion(false)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="your-review-card" style={{ background: "rgba(255,255,255,0.05)", padding: "12px", borderRadius: "8px" }}>
+                                  <p style={{ margin: "0 0 8px 0" }}>{currentUserComment.text}</p>
+                                  <div className="review-actions" style={{ display: "flex", gap: "8px" }}>
+                                    <button
+                                      type="button"
+                                      className="leave-button"
+                                      onClick={() => {
+                                        setEditingOpinion(true);
+                                        setEditedOpinionText(currentUserComment.text);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="leave-button"
+                                      onClick={handleDeleteOpinion}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="comment-form">
+                              <input
+                                type="text"
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") submitComment();
+                                }}
+                                placeholder="Share your thoughts on this story..."
+                                maxLength={1000}
+                              />
+                              <button
+                                type="button"
+                                onClick={submitComment}
+                                disabled={!newComment.trim()}
+                              >
+                                Post
+                              </button>
+                            </div>
+                          )
                         ) : (
                           <SignInButton mode="modal">
                             <button type="button" className="opinion-signin-btn">
@@ -1530,6 +1695,7 @@ function App({
                             </button>
                           </SignInButton>
                         )}
+
                         <div className="comment-list">
                           {workComments.length === 0 ? (
                             <p className="chat-empty">No opinions yet. Be the first to share your thoughts!</p>
@@ -1538,7 +1704,10 @@ function App({
                               <div className="comment-item" key={comment.id}>
                                 <img
                                   className="comment-avatar"
-                                  src={comment.avatarUrl ?? "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.nametag)}
+                                  src={
+                                    comment.avatarUrl ??
+                                    "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.nametag)
+                                  }
                                   alt={comment.nametag}
                                 />
                                 <div className="comment-content">
@@ -1637,6 +1806,48 @@ function App({
                         </div>
                       )}
                     </div>
+                    {selectedMember.isPublic ? (
+  <>
+    {/* Existing Favorites section */}
+    {/* Existing Watched section */}
+
+    <div className="settings-section">
+      <h4>Posted Opinions</h4>
+      {!selectedMember.comments || selectedMember.comments.length === 0 ? (
+        <p className="chat-empty">No public opinions</p>
+      ) : (
+        <div className="comment-list">
+          {selectedMember.comments.map((comment) => (
+            <div className="comment-item" key={comment.id}>
+              <div className="comment-content">
+                <span className="comment-author">{comment.workTitle}</span>
+                <p>"{comment.text}"</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div className="settings-section">
+      <h4>Favorite Ships</h4>
+      {!selectedMember.favoriteShips || selectedMember.favoriteShips.length > 0 ? (
+        <p className="chat-empty">No favorite ships</p>
+      ) : (
+        <div className="profile-works">
+          {selectedMember.favoriteShips.map((ship) => (
+            <div className="profile-work" key={ship.id}>
+              <img src={ship.image} alt={ship.name} />
+              <span>{ship.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </>
+) : (
+  <p className="chat-empty">This member's activity is private.</p>
+)}
                   </>
                 ) : (
                   <p className="chat-empty">This member's activity is private.</p>
