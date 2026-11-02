@@ -20,7 +20,7 @@ import { formats, genres, isWork, works, type Work } from "./catalog";
 import UserMatches from "./UserMatches";
 import UserSettings from "./UserSettings";
 import Ships from "./Ships";
-import mainArt from "../images/Main_art.jpg";
+import mainArt from "../images/Main_art.webp";
 
 type AccountStatus = "disabled" | "loading" | "signed-out" | "signed-in";
 const CATALOG_SECTION_SIZE = 15;
@@ -1042,7 +1042,13 @@ async function handleDeleteOpinion() {
             </div>
           </div>
           <div className="hero-art">
-            <img src={mainArt} alt="GLify community artwork" />
+            <img
+              src={mainArt}
+              alt="GLify community artwork"
+              width={1408}
+              height={768}
+              fetchPriority="high"
+            />
           </div>
           <div className="hero-bottom-note"><span /> GOOD STORIES. GOOD COMPANY. ALWAYS.</div>
         </section>
