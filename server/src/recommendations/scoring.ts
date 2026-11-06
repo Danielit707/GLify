@@ -146,6 +146,16 @@ export function rankPersonalizedWorks(
   );
   const coldStart = maxSimilarMemberSignal === 0;
   const totalInterestWeight = [...interestWeights.values()].reduce((sum, weight) => sum + weight, 0);
+  const similarMemberSignals = new Map<string, { score: number; memberCount: number }>();
+  for (const neighbor of neighbors) {
+    for (const [workId, activityWeight] of neighbor.profile) {
+      if (interactedWorkIds.has(workId)) continue;
+      const current = similarMemberSignals.get(workId) ?? { score: 0, memberCount: 0 };
+      current.score += neighbor.matchScore * activityWeight;
+      current.memberCount++;
+      similarMemberSignals.set(workId, current);
+    }
+  }
 
   const recommendations = works
     .filter((work) => !interactedWorkIds.has(work.id))
@@ -163,14 +173,9 @@ export function rankPersonalizedWorks(
         ? 0
         : (matchingInterestWeight / totalInterestWeight) * 100;
 
-      let neighborSignal = 0;
-      let similarMemberCount = 0;
-      for (const neighbor of neighbors) {
-        const candidateWeight = neighbor.profile.get(work.id);
-        if (candidateWeight === undefined) continue;
-        neighborSignal += neighbor.matchScore * candidateWeight;
-        similarMemberCount++;
-      }
+      const similarMemberSignal = similarMemberSignals.get(work.id);
+      const neighborSignal = similarMemberSignal?.score ?? 0;
+      const similarMemberCount = similarMemberSignal?.memberCount ?? 0;
       const similarMemberScore = maxSimilarMemberSignal === 0
         ? 0
         : (neighborSignal / maxSimilarMemberSignal) * 100;

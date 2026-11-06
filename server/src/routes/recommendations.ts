@@ -16,7 +16,6 @@ import {
   type WorkInteraction,
 } from "../recommendations/scoring.js";
 import { authenticateUser } from "./auth.js";
-import { syncUserGraph } from "./user-graph-sync.js";
 
 const SimilarWorksSchema = z.object({
   workId: z.string().min(1),
@@ -53,26 +52,25 @@ export default async function recommendationRoutes(
     if (!driver) {
       return reply.code(503).send({ error: "Recommendation graph is not configured." });
     }
-    if (!(await syncUserGraph(fastify, userId))) {
-      return reply.code(503).send({ error: "Recommendation graph is not synchronized." });
-    }
-
-    const catalogRows = await fastify.postgres`
-      SELECT id, title, format, tags
-      FROM works
-      WHERE curation_status = 'approved'
-        AND EXISTS (
-          SELECT 1
-          FROM unnest(tags[1:6]) AS tag
-          WHERE lower(tag) IN ('yuri', 'shoujo ai')
-        )
-    `;
-    const optedInRows = await fastify.postgres`
-      SELECT user_id
-      FROM recommendation_preferences
-      WHERE share_activity = true
-    `;
+    const [catalogRows, optedInRows] = await Promise.all([
+      fastify.postgres`
+        SELECT id, title, format, tags
+        FROM works
+        WHERE curation_status = 'approved'
+          AND EXISTS (
+            SELECT 1
+            FROM unnest(tags[1:6]) AS tag
+            WHERE lower(tag) IN ('yuri', 'shoujo ai')
+          )
+      `,
+      fastify.postgres`
+        SELECT user_id
+        FROM recommendation_preferences
+        WHERE share_activity = true
+      `,
+    ]);
     const optedInUserIds = new Set(optedInRows.map((row) => String(row.user_id)));
+    const eligibleUserIds = [...optedInUserIds];
     const workById = new Map<string, RecommendationWork>();
     for (const row of catalogRows) {
       if (!Array.isArray(row.tags) || !row.tags.every((tag) => typeof tag === "string")) {
@@ -89,9 +87,17 @@ export default async function recommendationRoutes(
     const session = driver.session();
     try {
       const result = await session.run(
-        `MATCH (u:User)-[r]->(w:GL_Work)
+        `MATCH (u:User)
+         WHERE u.id = $userId OR u.id IN $eligibleUserIds
+         MATCH (u)-[r]->(w:GL_Work)
          WHERE type(r) IN ['FAVORITED', 'WATCHED']
+           AND w.id IN $workIds
          RETURN u.id AS userId, w.id AS workId, type(r) AS kind`,
+        {
+          userId,
+          eligibleUserIds,
+          workIds: [...workById.keys()],
+        },
       );
       const interactions: WorkInteraction[] = result.records.flatMap((record) => {
         const interactionUserId: unknown = record.get("userId");
@@ -111,15 +117,37 @@ export default async function recommendationRoutes(
           kind: kind === "FAVORITED" ? "favorite" : "watched",
         }];
       });
-      const currentUserInteractions = await fastify.postgres`
-        SELECT work_id, 'favorite' AS kind
-        FROM favorites
-        WHERE user_id = ${userId}
-        UNION ALL
-        SELECT work_id, 'watched' AS kind
-        FROM watched_works
-        WHERE user_id = ${userId}
-      `;
+      const [currentUserInteractions, communityRows, shipRows] = await Promise.all([
+        fastify.postgres`
+          SELECT work_id, 'favorite' AS kind
+          FROM favorites
+          WHERE user_id = ${userId}
+          UNION ALL
+          SELECT work_id, 'watched' AS kind
+          FROM watched_works
+          WHERE user_id = ${userId}
+        `,
+        fastify.postgres`
+          SELECT user_id, community_id
+          FROM community_members
+          WHERE user_id = ${userId}
+             OR user_id IN (
+               SELECT user_id
+               FROM recommendation_preferences
+               WHERE share_activity = true
+             )
+        `,
+        fastify.postgres`
+          SELECT user_id, ship_id
+          FROM ship_favorites
+          WHERE user_id = ${userId}
+             OR user_id IN (
+               SELECT user_id
+               FROM recommendation_preferences
+               WHERE share_activity = true
+             )
+        `,
+      ]);
       for (const row of currentUserInteractions) {
         const workId = String(row.work_id);
         if (workById.has(workId) && (row.kind === "favorite" || row.kind === "watched")) {
@@ -132,10 +160,6 @@ export default async function recommendationRoutes(
         interactions,
       );
 
-      const communityRows = await fastify.postgres`
-        SELECT user_id, community_id
-        FROM community_members
-      `;
       const communityInteractions = communityRows
         .filter((row) => row.user_id === userId || optedInUserIds.has(String(row.user_id)))
         .map((row) => ({
@@ -143,10 +167,6 @@ export default async function recommendationRoutes(
           communityId: String(row.community_id),
         }));
 
-      const shipRows = await fastify.postgres`
-        SELECT user_id, ship_id
-        FROM ship_favorites
-      `;
       const shipInteractions = shipRows
         .filter((row) => row.user_id === userId || optedInUserIds.has(String(row.user_id)))
         .map((row) => ({

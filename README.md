@@ -171,6 +171,7 @@ Removes works without "yuri" or "shoujo ai" in their first 6 tags from both Post
 | `npm run build:server` | Build the API for production |
 | `npm run typecheck:server` | Type-check the API |
 | `npm --prefix server test` | Test personalized recommendation scoring |
+| `npm --prefix server run perf:benchmark` | Benchmark recommendation matching locally or load-test an authorized API |
 | `npm run db:setup` | Create or upgrade catalog and account activity tables |
 | `npm run db:import-anilist` | Import yuri-tagged titles from AniList |
 | `npm run db:filter-yuri` | Remove works without yuri in first 6 tags |
@@ -207,6 +208,23 @@ glify/
 3. **Neon schema:** Before deploying this API version, run `npm run db:setup` locally with `server/.env` pointed at the production Neon database. This safely creates the watched/read and activity-sharing tables alongside existing catalog/favorites data.
 4. **Neo4j AuraDB:** Configure the driver URI, username, and password in the API service's environment. The API synchronizes graph works from Neon at startup and updates user favorite/watched relationships as they change.
 5. **Upstash Redis:** Configure managed Redis credentials only in the API service when cache/rate-limit features are implemented.
+
+### Measuring recommendation performance
+
+Run the CPU-only synthetic matching benchmark (no network, database, or credentials required). Save the first run, then use `--compare` on the next run to report latency and throughput changes:
+
+```bash
+npm --prefix server run perf:benchmark -- --output C:\path\outside\repo\before.json
+npm --prefix server run perf:benchmark -- --compare C:\path\outside\repo\before.json --output C:\path\outside\repo\after.json
+```
+
+For an authenticated API load test, first prepare a JSON array of valid Clerk session tokens for test accounts in a file outside the repository. Then target local development or an explicitly authorized staging service:
+
+```bash
+npm --prefix server run perf:benchmark -- --mode api --base-url http://127.0.0.1:3001 --tokens-file C:\path\outside\repo\test-tokens.json --requests 40 --concurrency 4
+```
+
+The script reports latency percentiles, throughput, status codes, response size, and the number of distinct test accounts. For before/after API comparisons, use the same test accounts, target, request count, and concurrency, saving the first run with `--output` and passing it to the second run with `--compare`. API tests default to loopback targets; a remote staging target requires `--allow-remote` and has stricter workload caps. Production is blocked by default and capped at 30 requests / 2 concurrent requests even when explicitly enabled. Never use real member tokens or run load tests without authorization. The synthetic benchmark measures only the scoring engine; it does not represent database/network latency or truly concurrent API traffic.
 
 ## Contributing
 

@@ -165,6 +165,19 @@ export default fp(async function contextPlugin(
       PRIMARY KEY (ship_id, user_id)
     )
   `;
+  await postgresClient`
+    CREATE INDEX IF NOT EXISTS community_members_user_id_idx
+    ON community_members (user_id)
+  `;
+  await postgresClient`
+    CREATE INDEX IF NOT EXISTS ship_favorites_user_id_idx
+    ON ship_favorites (user_id)
+  `;
+  await postgresClient`
+    CREATE INDEX IF NOT EXISTS recommendation_preferences_shared_user_idx
+    ON recommendation_preferences (user_id)
+    WHERE share_activity = true
+  `;
 
   // Seed initial catalog works if table is empty
   const countRow = await postgresClient`SELECT COUNT(*) AS count FROM works`;
